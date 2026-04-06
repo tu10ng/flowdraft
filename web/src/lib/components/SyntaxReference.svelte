@@ -46,6 +46,25 @@
 				<p><code>:label "文本"</code> — 节点显示文本</p>
 				<p>节点名为标识符，如 <code>myNode</code></p>
 			</section>
+
+			<section>
+				<h3>模板定义 (define)</h3>
+				<pre><code>{`(define server (params name)
+  (cpu :label "\${name} CPU")
+  (eth0 :label "ETH0"))`}</code></pre>
+				<p>定义可复用的组件模板，支持 <code>{'${param}'}</code> 参数替换</p>
+			</section>
+
+			<section>
+				<h3>模板实例化</h3>
+				<pre><code>{`(tree :down
+  (rack
+    (server s1 "S1")
+    (server s2 "S2")))`}</code></pre>
+				<p>实例化后子节点 ID 自动加前缀：<code>s1.cpu</code>、<code>s1.eth0</code></p>
+				<p>可用点号引用子节点：<code>(line s1.eth0 -> s2.eth0)</code></p>
+				<p>可对子节点设样式：<code>(style s1.cpu :fill "#e8f4fd")</code></p>
+			</section>
 		</div>
 	</div>
 </div>

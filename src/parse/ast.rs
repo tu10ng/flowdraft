@@ -28,6 +28,14 @@ pub enum Form {
         options: Vec<(String, Option<String>)>,
         chains: Vec<FlowChain>,
     },
+    Define(DefineTemplate),
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct DefineTemplate {
+    pub name: String,           // template name, e.g. "server"
+    pub params: Vec<String>,    // parameter names, e.g. ["name"]
+    pub body: Vec<TreeNode>,    // template body nodes
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -67,4 +75,5 @@ pub struct FlowChain {
 pub struct FlowSegment {
     pub node: String,
     pub arrow: Option<Arrow>, // None for last node in chain
+    pub inline_node: Option<TreeNode>, // template instantiation in flow chain
 }

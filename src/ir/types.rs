@@ -7,6 +7,20 @@ pub struct DiagramIR {
     pub edges: Vec<Edge>,
     pub tree_roots: Vec<TreeInfo>,
     pub flow_graphs: Vec<FlowInfo>,
+    pub groups: Vec<Group>,
+}
+
+#[derive(Debug, Clone)]
+pub struct Group {
+    pub id: String,
+    pub label: String,
+    pub children: Vec<String>,
+    pub direction: Option<crate::parse::Direction>,
+    pub x: f64,
+    pub y: f64,
+    pub width: f64,
+    pub height: f64,
+    pub style: NodeStyle,
 }
 
 #[derive(Debug, Clone)]

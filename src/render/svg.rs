@@ -1,10 +1,11 @@
 /// SVG rendering from DiagramIR.
 use svg::node::element::{self, path::Data, Definitions, Marker, Rectangle, Text};
 use svg::Document;
+use std::collections::HashSet;
 
-use crate::ir::{DiagramIR, Edge, EdgeStyle, Node};
+use crate::ir::{DiagramIR, Edge, EdgeStyle, Group, Node};
 use crate::parse::Arrow;
-use crate::style::Theme;
+use crate::style::{self, Theme};
 use super::Renderer;
 
 pub struct SvgRenderer;
@@ -45,6 +46,14 @@ pub fn render_svg(ir: &DiagramIR, theme: &Theme) -> String {
             .set("height", "100%")
             .set("fill", theme.bg_color.as_str()),
     );
+
+    // Render groups (behind edges and nodes)
+    for group in &ir.groups {
+        if group.width > 0.0 {
+            let group_svg = render_group(group, offset_x, offset_y, theme);
+            doc = doc.add(group_svg);
+        }
+    }
 
     // Render tree edges (parent-child connections)
     for tree_info in &ir.tree_roots {
@@ -91,8 +100,12 @@ pub fn render_svg(ir: &DiagramIR, theme: &Theme) -> String {
         }
     }
 
-    // Render nodes
+    // Render nodes (skip instance nodes that are represented by group containers)
+    let group_ids: HashSet<&str> = ir.groups.iter().map(|g| g.id.as_str()).collect();
     for node in ir.nodes.values() {
+        if group_ids.contains(node.id.as_str()) {
+            continue;
+        }
         let (rect, text) = render_node(node, offset_x, offset_y, theme);
         doc = doc.add(rect);
         doc = doc.add(text);
@@ -116,6 +129,19 @@ fn bounding_box(ir: &DiagramIR) -> (f64, f64, f64, f64) {
         min_y = min_y.min(top);
         max_x = max_x.max(right);
         max_y = max_y.max(bottom);
+    }
+
+    for group in &ir.groups {
+        if group.width > 0.0 {
+            let left = group.x - group.width / 2.0;
+            let right = group.x + group.width / 2.0;
+            let top = group.y - group.height / 2.0;
+            let bottom = group.y + group.height / 2.0;
+            min_x = min_x.min(left);
+            min_y = min_y.min(top);
+            max_x = max_x.max(right);
+            max_y = max_y.max(bottom);
+        }
     }
 
     if min_x == f64::INFINITY {
@@ -167,6 +193,66 @@ fn render_node(
     let group = element::Group::new().add(text);
 
     (rect, group)
+}
+
+fn render_group(
+    group: &Group,
+    offset_x: f64,
+    offset_y: f64,
+    theme: &Theme,
+) -> element::Group {
+    let title_h = style::defaults::GROUP_TITLE_HEIGHT;
+    let x = group.x + offset_x - group.width / 2.0;
+    let y = group.y + offset_y - group.height / 2.0;
+
+    let fill = group.style.fill.as_deref().unwrap_or(style::defaults::GROUP_FILL);
+    let stroke = group.style.stroke.as_deref().unwrap_or(style::defaults::GROUP_STROKE);
+
+    // Background rect
+    let bg = element::Rectangle::new()
+        .set("x", x)
+        .set("y", y)
+        .set("width", group.width)
+        .set("height", group.height)
+        .set("rx", 8)
+        .set("ry", 8)
+        .set("fill", fill)
+        .set("stroke", stroke)
+        .set("stroke-width", 1.0);
+
+    // Title bar background
+    let title_bg = element::Rectangle::new()
+        .set("x", x)
+        .set("y", y)
+        .set("width", group.width)
+        .set("height", title_h)
+        .set("rx", 8)
+        .set("ry", 8)
+        .set("fill", style::defaults::GROUP_TITLE_BG)
+        .set("stroke", "none");
+
+    // Cover the bottom corners of the title bar so only top is rounded
+    let title_cover = element::Rectangle::new()
+        .set("x", x)
+        .set("y", y + title_h / 2.0)
+        .set("width", group.width)
+        .set("height", title_h / 2.0)
+        .set("fill", style::defaults::GROUP_TITLE_BG)
+        .set("stroke", "none");
+
+    // Title text
+    let title_text = Text::new(&group.label)
+        .set("x", x + 10.0)
+        .set("y", y + title_h / 2.0 + style::defaults::GROUP_TITLE_FONT_SIZE / 3.0)
+        .set("font-family", theme.font_family.as_str())
+        .set("font-size", style::defaults::GROUP_TITLE_FONT_SIZE)
+        .set("fill", theme.text_color.as_str());
+
+    element::Group::new()
+        .add(bg)
+        .add(title_bg)
+        .add(title_cover)
+        .add(title_text)
 }
 
 fn render_tree_edge(

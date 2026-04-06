@@ -5,14 +5,32 @@ use anyhow::{bail, Result};
 use unicode_width::UnicodeWidthStr;
 
 use crate::parse::*;
+use crate::parse::expand::GroupInfo;
 use crate::style::Theme;
 use super::types::*;
 
-pub fn build_ir(doc: &Document, theme: &Theme) -> Result<DiagramIR> {
+pub fn build_ir(doc: &Document, theme: &Theme, group_infos: Vec<GroupInfo>) -> Result<DiagramIR> {
     let mut nodes: HashMap<String, Node> = HashMap::new();
     let mut edges: Vec<Edge> = Vec::new();
     let mut tree_roots: Vec<TreeInfo> = Vec::new();
     let mut flow_graphs: Vec<FlowInfo> = Vec::new();
+
+    // Create nodes for group children first, so Style forms can reference them
+    for g in &group_infos {
+        for child in &g.children {
+            let label = child.label.as_deref().unwrap_or(&child.id);
+            let width = estimate_node_width(label, theme.char_width, theme.node_padding, theme.min_node_width);
+            nodes.entry(child.id.clone()).or_insert_with(|| Node {
+                id: child.id.clone(),
+                label: label.to_string(),
+                x: 0.0,
+                y: 0.0,
+                width,
+                height: theme.node_height,
+                style: NodeStyle::default(),
+            });
+        }
+    }
 
     for form in &doc.forms {
         match form {
@@ -107,14 +125,34 @@ pub fn build_ir(doc: &Document, theme: &Theme) -> Result<DiagramIR> {
                     }
                 }
             }
+            Form::Define(_) => {
+                // Define forms are consumed by expand_defines() before build_ir.
+                // If one reaches here, it's a no-op.
+            }
         }
     }
+
+    let groups = group_infos
+        .into_iter()
+        .map(|g| Group {
+            id: g.id.clone(),
+            label: g.label,
+            children: g.children.into_iter().map(|c| c.id).collect(),
+            direction: g.direction,
+            x: 0.0,
+            y: 0.0,
+            width: 0.0,
+            height: 0.0,
+            style: NodeStyle::default(),
+        })
+        .collect();
 
     Ok(DiagramIR {
         nodes,
         edges,
         tree_roots,
         flow_graphs,
+        groups,
     })
 }
 
@@ -165,7 +203,7 @@ mod tests {
     #[test]
     fn test_build_ir_tree() {
         let doc = parse_document("(tree :down (a (b c d)))").unwrap();
-        let ir = build_ir(&doc, &Theme::default()).unwrap();
+        let ir = build_ir(&doc, &Theme::default(), vec![]).unwrap();
         assert_eq!(ir.nodes.len(), 4);
         assert!(ir.nodes.contains_key("a"));
         assert!(ir.nodes.contains_key("b"));
@@ -176,7 +214,7 @@ mod tests {
     #[test]
     fn test_build_ir_with_line() {
         let doc = parse_document(r#"(tree :down (a (b c))) (line :straight b -> c :desc "test")"#).unwrap();
-        let ir = build_ir(&doc, &Theme::default()).unwrap();
+        let ir = build_ir(&doc, &Theme::default(), vec![]).unwrap();
         assert_eq!(ir.edges.len(), 1);
         assert_eq!(ir.edges[0].from, "b");
         assert_eq!(ir.edges[0].to, "c");
@@ -194,7 +232,7 @@ mod tests {
     #[test]
     fn test_build_ir_flow() {
         let doc = parse_document("(flow :right (a -> b) (b -> c -> d) (b -> e))").unwrap();
-        let ir = build_ir(&doc, &Theme::default()).unwrap();
+        let ir = build_ir(&doc, &Theme::default(), vec![]).unwrap();
         assert_eq!(ir.flow_graphs.len(), 1);
         let fg = &ir.flow_graphs[0];
         assert_eq!(fg.node_order, vec!["a", "b", "c", "d", "e"]);
@@ -208,7 +246,7 @@ mod tests {
     #[test]
     fn test_build_ir_flow_shared_nodes() {
         let doc = parse_document("(flow :right (a -> b) (a -> c) (b -> d) (c -> d))").unwrap();
-        let ir = build_ir(&doc, &Theme::default()).unwrap();
+        let ir = build_ir(&doc, &Theme::default(), vec![]).unwrap();
         // d appears in two chains but should only be one node
         assert_eq!(ir.nodes.len(), 4);
         assert_eq!(ir.flow_graphs[0].adjacency.len(), 4);

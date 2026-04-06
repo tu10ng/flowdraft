@@ -35,6 +35,7 @@ fn parse_form(value: &Value) -> Result<Form> {
         "line" => parse_line_form(value),
         "style" => parse_style_form(value),
         "flow" => parse_flow_form(value),
+        "define" => parse_define_form(value),
         other => bail!("unknown command: {}", other),
     }
 }
@@ -250,6 +251,48 @@ fn parse_style_form(value: &Value) -> Result<Form> {
     Ok(Form::Style { target, props })
 }
 
+fn parse_define_form(value: &Value) -> Result<Form> {
+    let items = collect_list(value);
+    // (define server (params name) (cpu :label "${name} CPU") ...)
+    if items.len() < 3 {
+        bail!("define form needs at least a name and body");
+    }
+
+    let name = items[1]
+        .as_symbol()
+        .ok_or_else(|| anyhow!("define: expected template name symbol, got: {}", items[1]))?
+        .to_string();
+
+    // Parse (params ...) list
+    let mut params = Vec::new();
+    let mut body_start = 2;
+
+    if let Some(cons) = items[2].as_cons() {
+        if cons.car().as_symbol() == Some("params") {
+            let param_items = collect_list(items[2]);
+            for p in &param_items[1..] {
+                params.push(
+                    p.as_symbol()
+                        .ok_or_else(|| anyhow!("define: expected param name symbol, got: {}", p))?
+                        .to_string(),
+                );
+            }
+            body_start = 3;
+        }
+    }
+
+    let mut body = Vec::new();
+    for item in &items[body_start..] {
+        body.push(parse_tree_node(item)?);
+    }
+
+    if body.is_empty() {
+        bail!("define form has empty body");
+    }
+
+    Ok(Form::Define(DefineTemplate { name, params, body }))
+}
+
 fn parse_flow_form(value: &Value) -> Result<Form> {
     let items = collect_list(value);
     // items[0] = "flow", then direction keyword, then chain sub-lists
@@ -288,14 +331,26 @@ fn parse_flow_chain(value: &Value) -> Result<FlowChain> {
 
     let mut i = 0;
     while i < items.len() {
-        let name = value_to_name(items[i])
-            .ok_or_else(|| anyhow!("expected node name in flow chain, got: {}", items[i]))?;
-
         if is_arrow_symbol(items[i]) {
             // skip stray arrows
             i += 1;
             continue;
         }
+
+        // Check if this item is a nested list (inline template instantiation)
+        let (name, inline_node) = if items[i].as_cons().is_some() && items[i].as_cons().map(|c| c.car().as_symbol().is_some() && !is_arrow(c.car().as_symbol().unwrap_or(""))).unwrap_or(false) {
+            let tree_node = parse_tree_node(items[i])?;
+            // The instance_id is the first child's name (e.g., (server s3 "S3") -> s3)
+            if tree_node.children.is_empty() {
+                bail!("inline template instantiation in flow requires an instance id: {}", items[i]);
+            }
+            let instance_id = tree_node.children[0].name.clone();
+            (instance_id, Some(tree_node))
+        } else {
+            let name = value_to_name(items[i])
+                .ok_or_else(|| anyhow!("expected node name in flow chain, got: {}", items[i]))?;
+            (name, None)
+        };
 
         let arrow = if i + 1 < items.len() && is_arrow_symbol(items[i + 1]) {
             let a = parse_arrow(items[i + 1].as_symbol().unwrap());
@@ -306,7 +361,7 @@ fn parse_flow_chain(value: &Value) -> Result<FlowChain> {
             None
         };
 
-        segments.push(FlowSegment { node: name, arrow });
+        segments.push(FlowSegment { node: name, arrow, inline_node });
     }
 
     if segments.is_empty() {
@@ -525,6 +580,28 @@ mod tests {
             Form::Flow { direction, chains, .. } => {
                 assert_eq!(*direction, Direction::Right);
                 assert_eq!(chains.len(), 4);
+            }
+            _ => panic!("expected flow form"),
+        }
+    }
+
+    #[test]
+    fn test_parse_flow_inline_template() {
+        let input = r#"(flow :right (rack -> (server s3 "S3") -> (server s4 "S4")))"#;
+        let doc = parse_document(input).unwrap();
+        match &doc.forms[0] {
+            Form::Flow { chains, .. } => {
+                assert_eq!(chains.len(), 1);
+                let segs = &chains[0].segments;
+                assert_eq!(segs.len(), 3);
+                assert_eq!(segs[0].node, "rack");
+                assert!(segs[0].inline_node.is_none());
+                assert_eq!(segs[1].node, "s3");
+                assert!(segs[1].inline_node.is_some());
+                let inline = segs[1].inline_node.as_ref().unwrap();
+                assert_eq!(inline.name, "server");
+                assert_eq!(segs[2].node, "s4");
+                assert!(segs[2].inline_node.is_some());
             }
             _ => panic!("expected flow form"),
         }

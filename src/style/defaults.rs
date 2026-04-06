@@ -14,3 +14,10 @@ pub const FONT_SIZE: f64 = 14.0;
 
 pub const BG_COLOR: &str = "#fafafa";
 pub const SVG_PADDING: f64 = 40.0;
+
+pub const GROUP_PADDING: f64 = 15.0;
+pub const GROUP_TITLE_HEIGHT: f64 = 28.0;
+pub const GROUP_FILL: &str = "#f8f9fa";
+pub const GROUP_STROKE: &str = "#dee2e6";
+pub const GROUP_TITLE_BG: &str = "#e9ecef";
+pub const GROUP_TITLE_FONT_SIZE: f64 = 12.0;

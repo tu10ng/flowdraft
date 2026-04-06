@@ -1,0 +1,12 @@
+(define server (params name)
+  (cpu :label "${name} CPU")
+  (eth0 :label "ETH0")
+  (eth1 :label "ETH1"))
+
+(tree :down
+  (rack :label "机架"
+    (server s1 "S1")
+    (server s2 "S2")))
+
+(line :straight s1.eth0 -> s2.eth0 :desc "网络")
+(style s1.cpu :fill "#e8f4fd")

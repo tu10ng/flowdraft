@@ -106,6 +106,26 @@ export const templates: Template[] = [
 (style inventory :fill "#fff3e0" :stroke "#ff9800")`
 	},
 	{
+		id: 'define-template',
+		name: '模板复用',
+		category: 'tree',
+		description: '用 define 定义可复用组件，实例化多个副本并连线',
+		code: `(define server (params name)
+  (cpu :label "\${name} CPU")
+  (eth0 :label "ETH0")
+  (eth1 :label "ETH1"))
+
+(tree :down
+  (rack :label "机架"
+    (server s1 "S1")
+    (server s2 "S2")))
+
+(line :straight s1.eth0 -> s2.eth0 :desc "网络连接")
+
+(style s1.cpu :fill "#e8f4fd" :stroke "#2196f3")
+(style s2.cpu :fill "#fff3e0" :stroke "#ff9800")`
+	},
+	{
 		id: 'styled-tree',
 		name: '彩色样式树',
 		category: 'style',
