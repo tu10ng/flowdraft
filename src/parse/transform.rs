@@ -4,6 +4,14 @@ use lexpr::Value;
 
 use super::ast::*;
 
+/// Extract a name from a Symbol or String value.
+fn value_to_name(value: &Value) -> Option<String> {
+    value
+        .as_symbol()
+        .map(|s| s.to_string())
+        .or_else(|| value.as_str().map(|s| s.to_string()))
+}
+
 pub fn parse_document(input: &str) -> Result<Document> {
     let options = lexpr::parse::Options::new()
         .with_keyword_syntax(lexpr::parse::KeywordSyntax::ColonPrefix);
@@ -93,12 +101,15 @@ fn parse_tree_form(value: &Value) -> Result<Form> {
 
 fn parse_tree_node(value: &Value) -> Result<TreeNode> {
     match value {
-        // Simple atom: just a name
-        Value::Symbol(name) => Ok(TreeNode {
-            name: name.to_string(),
-            label: None,
-            children: Vec::new(),
-        }),
+        // Simple atom: just a name (symbol or string)
+        v if v.is_symbol() || v.is_string() => {
+            let name = value_to_name(v).unwrap();
+            Ok(TreeNode {
+                name,
+                label: None,
+                children: Vec::new(),
+            })
+        }
         // List: could be (name children...) or (name :label "text" children...)
         _ if value.as_cons().is_some() => {
             let items = collect_list(value);
@@ -106,10 +117,8 @@ fn parse_tree_node(value: &Value) -> Result<TreeNode> {
                 bail!("empty tree node");
             }
 
-            let name = items[0]
-                .as_symbol()
-                .ok_or_else(|| anyhow!("expected node name symbol, got: {}", items[0]))?
-                .to_string();
+            let name = value_to_name(items[0])
+                .ok_or_else(|| anyhow!("expected node name symbol or string, got: {}", items[0]))?;
 
             let mut label = None;
             let mut children = Vec::new();
@@ -188,6 +197,17 @@ fn parse_line_form(value: &Value) -> Result<Form> {
             } else {
                 i += 1;
             }
+        } else if let Some(name) = value_to_name(items[i]) {
+            // String node name
+            if from.is_none() {
+                from = Some(name);
+                i += 1;
+            } else if to.is_none() {
+                to = Some(name);
+                i += 1;
+            } else {
+                i += 1;
+            }
         } else {
             i += 1;
         }
@@ -208,10 +228,8 @@ fn parse_style_form(value: &Value) -> Result<Form> {
     if items.len() < 2 {
         bail!("style form needs a target");
     }
-    let target = items[1]
-        .as_symbol()
-        .ok_or_else(|| anyhow!("style target must be a symbol"))?
-        .to_string();
+    let target = value_to_name(items[1])
+        .ok_or_else(|| anyhow!("style target must be a symbol or string"))?;
 
     let mut props = Vec::new();
     let mut i = 2;
@@ -351,5 +369,47 @@ mod tests {
         let input = r#"(tree :down (a (b c))) (line :straight b -> c :desc "test")"#;
         let doc = parse_document(input).unwrap();
         assert_eq!(doc.forms.len(), 2);
+    }
+
+    #[test]
+    fn test_parse_tree_string_node_names() {
+        let input = r#"(tree :down ("部门" ("研发" "测试A") "测试B"))"#;
+        let doc = parse_document(input).unwrap();
+        match &doc.forms[0] {
+            Form::Tree { root, .. } => {
+                assert_eq!(root.name, "部门");
+                assert_eq!(root.children.len(), 2);
+                assert_eq!(root.children[0].name, "研发");
+                assert_eq!(root.children[0].children[0].name, "测试A");
+                assert_eq!(root.children[1].name, "测试B");
+            }
+            _ => panic!("expected tree form"),
+        }
+    }
+
+    #[test]
+    fn test_parse_line_string_node_names() {
+        let input = r#"(line :straight "部门" -> "研发")"#;
+        let doc = parse_document(input).unwrap();
+        match &doc.forms[0] {
+            Form::Line { from, to, .. } => {
+                assert_eq!(from, "部门");
+                assert_eq!(to, "研发");
+            }
+            _ => panic!("expected line form"),
+        }
+    }
+
+    #[test]
+    fn test_parse_style_string_target() {
+        let input = r##"(style "部门" :fill "#eee")"##;
+        let doc = parse_document(input).unwrap();
+        match &doc.forms[0] {
+            Form::Style { target, props } => {
+                assert_eq!(target, "部门");
+                assert_eq!(props[0], ("fill".to_string(), "#eee".to_string()));
+            }
+            _ => panic!("expected style form"),
+        }
     }
 }
