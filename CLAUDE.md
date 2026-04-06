@@ -97,8 +97,8 @@ cd web && pnpm run dev                      # 本地开发服务器
 ;; 定义模板，带参数
 (define server (params name)
   (cpu :label "${name} CPU")
-  (eth0 :label "ETH0")
-  (eth1 :label "ETH1"))
+  (eth0)
+  (eth1))
 
 ;; 在 tree 中实例化 — 位置传参
 (tree :down
@@ -122,6 +122,7 @@ cd web && pnpm run dev                      # 本地开发服务器
 - 实例化节点的第一个 child 作为 instance_id，后续 leaf children 作为位置参数
 - 模板 body 中的节点 ID 加前缀 `{instance_id}.`（如 `s1.cpu`、`s1.eth0`）
 - label 中的 `${param}` 被替换为参数值
+- 没有 `:label` 的节点默认使用 base symbol name 作为显示标签（如 `s1.eth0` 显示为 `eth0`）
 - 展开后生成 `Group`（分组容器），在 SVG 中渲染为带标题栏的圆角矩形
 - 支持嵌套模板（模板 body 中使用其他模板），不支持递归自引用
 

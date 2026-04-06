@@ -1,7 +1,7 @@
 (define server (params name)
   (cpu :label "${name} CPU")
-  (eth0 :label "ETH0")
-  (eth1 :label "ETH1"))
+  (eth0)
+  (eth1))
 
 (tree :down
   (rack :label "机架"

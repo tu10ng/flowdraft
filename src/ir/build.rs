@@ -9,6 +9,12 @@ use crate::parse::expand::GroupInfo;
 use crate::style::Theme;
 use super::types::*;
 
+/// Extract the base symbol name from a potentially prefixed ID.
+/// e.g. "s1.eth0" -> "eth0", "cpu" -> "cpu"
+fn display_name(id: &str) -> &str {
+    id.rsplit('.').next().unwrap_or(id)
+}
+
 pub fn build_ir(doc: &Document, theme: &Theme, group_infos: Vec<GroupInfo>) -> Result<DiagramIR> {
     let mut nodes: HashMap<String, Node> = HashMap::new();
     let mut edges: Vec<Edge> = Vec::new();
@@ -18,7 +24,7 @@ pub fn build_ir(doc: &Document, theme: &Theme, group_infos: Vec<GroupInfo>) -> R
     // Create nodes for group children first, so Style forms can reference them
     for g in &group_infos {
         for child in &g.children {
-            let label = child.label.as_deref().unwrap_or(&child.id);
+            let label = child.label.as_deref().unwrap_or_else(|| display_name(&child.id));
             let width = estimate_node_width(label, theme.char_width, theme.node_padding, theme.min_node_width);
             nodes.entry(child.id.clone()).or_insert_with(|| Node {
                 id: child.id.clone(),
@@ -87,10 +93,11 @@ pub fn build_ir(doc: &Document, theme: &Theme, group_infos: Vec<GroupInfo>) -> R
                             node_order.push(seg.node.clone());
                         }
                         nodes.entry(seg.node.clone()).or_insert_with(|| {
-                            let width = estimate_node_width(&seg.node, theme.char_width, theme.node_padding, theme.min_node_width);
+                            let label = display_name(&seg.node);
+                            let width = estimate_node_width(label, theme.char_width, theme.node_padding, theme.min_node_width);
                             Node {
                                 id: seg.node.clone(),
-                                label: seg.node.clone(),
+                                label: label.to_string(),
                                 x: 0.0,
                                 y: 0.0,
                                 width,
@@ -171,7 +178,7 @@ fn collect_tree_nodes(
     let label = tree_node
         .label
         .as_deref()
-        .unwrap_or(&tree_node.name);
+        .unwrap_or_else(|| display_name(&tree_node.name));
     let width = estimate_node_width(label, theme.char_width, theme.node_padding, theme.min_node_width);
 
     nodes.entry(tree_node.name.clone()).or_insert_with(|| Node {

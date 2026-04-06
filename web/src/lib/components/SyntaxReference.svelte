@@ -51,7 +51,7 @@
 				<h3>模板定义 (define)</h3>
 				<pre><code>{`(define server (params name)
   (cpu :label "\${name} CPU")
-  (eth0 :label "ETH0"))`}</code></pre>
+  (eth0))`}</code></pre>
 				<p>定义可复用的组件模板，支持 <code>{'${param}'}</code> 参数替换</p>
 			</section>
 

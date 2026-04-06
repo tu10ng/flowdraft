@@ -135,8 +135,8 @@ mod tests {
         let input = r##"
             (define server (params name)
                 (cpu :label "${name} CPU")
-                (eth0 :label "ETH0")
-                (eth1 :label "ETH1"))
+                (eth0)
+                (eth1))
             (tree :down
                 (rack :label "机架"
                     (server s1 "S1")
@@ -148,8 +148,9 @@ mod tests {
         // Expanded nodes should appear
         assert!(svg.contains("S1 CPU"), "SVG missing S1 CPU label");
         assert!(svg.contains("S2 CPU"), "SVG missing S2 CPU label");
-        assert!(svg.contains("ETH0"), "SVG missing ETH0 label");
-        assert!(svg.contains("ETH1"), "SVG missing ETH1 label");
+        // Nodes without :label use base symbol name as default label
+        assert!(svg.contains("eth0"), "SVG missing eth0 default label");
+        assert!(svg.contains("eth1"), "SVG missing eth1 default label");
         // Edge label
         assert!(svg.contains("网络"), "SVG missing edge label");
         // Group containers should be rendered (check for group fill color)

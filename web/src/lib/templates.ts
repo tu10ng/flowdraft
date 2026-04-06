@@ -112,8 +112,8 @@ export const templates: Template[] = [
 		description: '用 define 定义可复用组件，实例化多个副本并连线',
 		code: `(define server (params name)
   (cpu :label "\${name} CPU")
-  (eth0 :label "ETH0")
-  (eth1 :label "ETH1"))
+  (eth0)
+  (eth1))
 
 (tree :down
   (rack :label "机架"
