@@ -26,7 +26,7 @@ build_web() {
     echo "==> Building Web..."
     cd web
     pnpm install --frozen-lockfile
-    pnpm exec vite build
+    pnpm run build
     cd "$ROOT"
     echo "    Done: web/build/"
 }
@@ -34,6 +34,40 @@ build_web() {
 run_tests() {
     echo "==> Running tests..."
     cargo test
+}
+
+test_package() {
+    echo "==> Testing web package (simulating CI)..."
+
+    # Build web
+    build_web
+
+    # Build serve binaries
+    echo "==> Building serve binaries..."
+    cargo build --release --features serve --bin flowdraft-serve
+
+    # Create test package
+    echo "==> Creating test package..."
+    rm -rf dist/test-package
+    mkdir -p dist/test-package
+    cp -r web/build/* dist/test-package/
+    cp target/release/flowdraft-serve dist/test-package/flowdraft-serve-linux
+    cp web/README-SERVE.md dist/test-package/README.md
+    chmod +x dist/test-package/flowdraft-serve-linux
+
+    # Create zip
+    cd dist/test-package
+    zip -r ../flowdraft-web-test.zip .
+    cd "$ROOT"
+
+    echo "    Done: dist/flowdraft-web-test.zip"
+    echo ""
+    echo "To test:"
+    echo "  cd dist/test-package && ./flowdraft-serve-linux"
+    echo ""
+    echo "Or extract the zip:"
+    echo "  unzip dist/flowdraft-web-test.zip -d /tmp/flowdraft-test"
+    echo "  cd /tmp/flowdraft-test && ./flowdraft-serve-linux"
 }
 
 case "${1:-all}" in
@@ -56,13 +90,16 @@ case "${1:-all}" in
     test)
         run_tests
         ;;
+    package)
+        test_package
+        ;;
     all)
         run_tests
         build_cli
         build_web
         ;;
     *)
-        echo "Usage: $0 {cli|wasm|web|dev|test|all}"
+        echo "Usage: $0 {cli|wasm|web|dev|test|package|all}"
         exit 1
         ;;
 esac

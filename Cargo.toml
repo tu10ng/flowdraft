@@ -11,10 +11,16 @@ name = "flowdraft"
 path = "src/main.rs"
 required-features = ["cli"]
 
+[[bin]]
+name = "flowdraft-serve"
+path = "src/bin/serve.rs"
+required-features = ["serve"]
+
 [features]
 default = ["cli"]
 cli = ["dep:clap", "dep:notify", "dep:notify-debouncer-mini"]
 wasm = ["dep:wasm-bindgen"]
+serve = ["dep:tiny_http", "dep:open"]
 
 [dependencies]
 lexpr = "0.2"
@@ -31,3 +37,7 @@ notify-debouncer-mini = { version = "0.5", optional = true }
 
 # WASM-only
 wasm-bindgen = { version = "0.2", optional = true }
+
+# Serve-only
+tiny_http = { version = "0.12", optional = true }
+open = { version = "5", optional = true }

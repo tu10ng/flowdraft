@@ -6,7 +6,7 @@
 	"scripts": {
 		"wasm": "cd .. && ~/.cargo/bin/wasm-pack build --target web --features wasm --no-default-features && mkdir -p web/src/lib/pkg && cp -r pkg/* web/src/lib/pkg/",
 		"dev": "pnpm run wasm && vite dev",
-		"build": "pnpm run wasm && vite build",
+		"build": "pnpm run wasm && vite build && node fix-paths.js",
 		"preview": "vite preview",
 		"prepare": "svelte-kit sync || echo ''",
 		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",

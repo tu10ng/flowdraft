@@ -25,6 +25,7 @@ cd web && pnpm run dev                      # 本地开发服务器
 ./build.sh web     # WASM + Web 静态站点
 ./build.sh dev     # WASM + 启动 vite dev server
 ./build.sh test    # 仅测试
+./build.sh package # 构建 Web + serve 二进制，打包到 dist/
 ```
 
 ## 代码结构
@@ -108,3 +109,27 @@ cd web && pnpm run dev                      # 本地开发服务器
 ```
 
 **重要**：对话框组件（TemplateGallery、ExportDialog、SyntaxReference、WelcomeOverlay）渲染在主应用容器外，必须通过全局 CSS 变量继承主题。不要在 `.app` 元素上使用 `style={themeCSS}`，否则对话框无法访问主题变量。
+
+## 踩坑记录
+
+记录已遇到的 bug 及根因分析，避免重复犯错。
+
+### 1. fix-paths.js 正则替换丢失 `/`
+
+**现象**：打包后 `"/_app/foo"` 变成了 `"._app/foo"` 而非 `"./_app/foo"`，浏览器 404。
+
+**原因**：替换字符串写成 `'$1.$2$3'`，`$2` 捕获的是 `_app/...`（不含前导 `/`），拼接后 `"."`+`"_app/"` = `"._app/"`，少了 `/`。
+
+**修复**：`'$1./$2$3'`，手动补上 `/`。
+
+**教训**：正则替换中移除字符再拼接时，容易丢失分隔符。写完替换后应该用实际输入验证一遍输出，尤其是路径拼接场景——`"." + "_app"` ≠ `"./" + "_app"`。
+
+### 2. serve.rs 用相对路径读文件，依赖 cwd
+
+**现象**：从非可执行文件所在目录运行 `flowdraft-serve` 时，所有静态文件 404。
+
+**原因**：`Path::new(&path)` 构造的是相对路径，相对于进程的 cwd 而非 exe 所在目录。打包后用户可能从任意目录运行。
+
+**修复**：用 `std::env::current_exe().parent()` 获取 exe 所在目录，再 `root.join(&path)` 拼接。
+
+**教训**：嵌入式/自包含的静态文件服务器必须基于 exe 路径解析资源，不能假设 cwd。这是打包分发场景的常见陷阱——开发时 cwd 恰好正确所以不会暴露问题，部署后才出错。编写文件服务器时应默认问自己："用户会从哪个目录运行这个程序？"

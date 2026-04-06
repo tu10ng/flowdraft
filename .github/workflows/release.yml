@@ -84,8 +84,43 @@ jobs:
           name: web-static
           path: web/build/
 
+  build-serve:
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            artifact: flowdraft-serve-linux
+            binary: flowdraft-serve
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            artifact: flowdraft-serve-windows.exe
+            binary: flowdraft-serve.exe
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: serve-${{ matrix.target }}
+
+      - run: cargo build --release --features serve --bin flowdraft-serve --target ${{ matrix.target }}
+
+      - name: Rename binary
+        shell: bash
+        run: cp target/${{ matrix.target }}/release/${{ matrix.binary }} ${{ matrix.artifact }}
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: ${{ matrix.artifact }}
+
   release:
-    needs: [build-cli, build-web]
+    needs: [build-cli, build-web, build-serve]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -99,6 +134,10 @@ jobs:
           mkdir release
           cp artifacts/flowdraft-linux-x86_64/flowdraft-linux-x86_64 release/
           cp artifacts/flowdraft-windows-x86_64.exe/flowdraft-windows-x86_64.exe release/
+          cp artifacts/flowdraft-serve-linux/flowdraft-serve-linux artifacts/web-static/
+          cp artifacts/flowdraft-serve-windows.exe/flowdraft-serve-windows.exe artifacts/web-static/
+          cp web/README-SERVE.md artifacts/web-static/README.md
+          chmod +x artifacts/web-static/flowdraft-serve-linux
           cd artifacts/web-static && zip -r ../../release/flowdraft-web.zip . && cd ../..
           chmod +x release/flowdraft-linux-x86_64
 
