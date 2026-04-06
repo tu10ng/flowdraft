@@ -1,0 +1,118 @@
+name: Release
+
+on: push
+
+permissions:
+  contents: write
+
+jobs:
+  build-cli:
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            artifact: flowdraft-linux-x86_64
+            binary: flowdraft
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            artifact: flowdraft-windows-x86_64.exe
+            binary: flowdraft.exe
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.target }}
+
+      - run: cargo build --release --target ${{ matrix.target }}
+
+      - name: Rename binary
+        shell: bash
+        run: cp target/${{ matrix.target }}/release/${{ matrix.binary }} ${{ matrix.artifact }}
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: ${{ matrix.artifact }}
+
+  build-web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: wasm
+
+      - name: Install wasm-pack
+        run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
+
+      - name: Build WASM
+        run: wasm-pack build --target web --features wasm --no-default-features
+
+      - name: Copy WASM to web
+        run: cp -r pkg/* web/src/lib/pkg/
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: web/pnpm-lock.yaml
+
+      - run: pnpm install --frozen-lockfile
+        working-directory: web
+
+      - run: pnpm exec vite build
+        working-directory: web
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: web-static
+          path: web/build/
+
+  release:
+    needs: [build-cli, build-web]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Prepare release files
+        run: |
+          mkdir release
+          cp artifacts/flowdraft-linux-x86_64/flowdraft-linux-x86_64 release/
+          cp artifacts/flowdraft-windows-x86_64.exe/flowdraft-windows-x86_64.exe release/
+          cd artifacts/web-static && zip -r ../../release/flowdraft-web.zip . && cd ../..
+          chmod +x release/flowdraft-linux-x86_64
+
+      - name: Generate tag
+        id: tag
+        run: |
+          TAG="$(date -u +%Y.%m.%d)-$(git rev-parse --short=7 HEAD)"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.tag.outputs.tag }}
+          name: ${{ steps.tag.outputs.tag }}
+          files: |
+            release/flowdraft-linux-x86_64
+            release/flowdraft-windows-x86_64.exe
+            release/flowdraft-web.zip
