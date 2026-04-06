@@ -43,10 +43,24 @@ cd web && pnpm run dev                      # 本地开发服务器
 ### Web (web/)
 
 - `web/src/lib/wasm.ts` — WASM 加载器，import `./pkg/flowdraft.js`（Vite 打包）
-- `web/src/lib/examples.ts` — 预置示例 DSL 片段
-- `web/src/lib/components/Editor.svelte` — CodeMirror 6 编辑器（one-dark 主题）
-- `web/src/lib/components/Preview.svelte` — SVG 预览面板
-- `web/src/routes/+page.svelte` — 主页面：左右分栏、示例选择、导出 SVG
+- `web/src/lib/templates.ts` — 预置模板 DSL 片段
+- `web/src/lib/components/` — Svelte 组件
+  - `Editor.svelte` — CodeMirror 6 编辑器（one-dark 主题）
+  - `Preview.svelte` — SVG 预览面板
+  - `MenuBar.svelte` — 菜单栏（文件、视图、帮助）
+  - `TabBar.svelte` — 文件标签栏
+  - `StatusBar.svelte` — 状态栏（错误、光标位置、字符数）
+  - `SplitPane.svelte` — 可调整分栏
+  - `TemplateGallery.svelte` — 模板对话框
+  - `ExportDialog.svelte` — 导出对话框
+  - `SyntaxReference.svelte` — 语法参考
+  - `WelcomeOverlay.svelte` — 欢迎页
+- `web/src/lib/stores/` — 状态管理
+  - `files.ts` — 文件状态（多文件、标签页、本地存储）
+  - `theme.ts` — 主题状态（亮色/暗色切换）
+  - `shortcuts.ts` — 快捷键注册与处理
+- `web/src/lib/styles/themes.ts` — 主题定义（CSS 变量）
+- `web/src/routes/+page.svelte` — 主页面：分栏布局、对话框管理
 - `web/src/lib/pkg/` — wasm-pack 构建输出（gitignore，构建时生成，Vite 作为模块打包）
 
 ## Feature Flags
@@ -81,3 +95,16 @@ cd web && pnpm run dev                      # 本地开发服务器
 - CJK 字符宽度通过 `unicode-width` 计算，每个 CJK 字符算 2 列宽
 - 测试中含嵌套引号的字符串用 `r##"..."##` 原始字符串
 - WASM 构建输出到项目根 `pkg/`，由 `build.sh` 复制到 `web/src/lib/pkg/` 供 Vite 打包（wasm-pack 的 `--out-dir` 在新版 cargo 不可用）
+
+### Web 主题系统
+
+主题 CSS 变量通过 `<svelte:head>` 注入到 `:root`，确保所有组件（包括对话框）都能访问：
+
+```svelte
+<!-- web/src/routes/+page.svelte -->
+<svelte:head>
+  {@html `<style>:root { ${themeCSS} }</style>`}
+</svelte:head>
+```
+
+**重要**：对话框组件（TemplateGallery、ExportDialog、SyntaxReference、WelcomeOverlay）渲染在主应用容器外，必须通过全局 CSS 变量继承主题。不要在 `.app` 元素上使用 `style={themeCSS}`，否则对话框无法访问主题变量。

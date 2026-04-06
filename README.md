@@ -1,14 +1,33 @@
 # Flowdraft
 
-Lisp 风格 DSL 到 SVG 图表的命令行渲染工具。
+Lisp 风格 DSL 到 SVG 图表的渲染工具，提供命令行工具和 Web Playground。
 
-## 安装
+## 安装与使用
+
+### Web Playground（推荐）
+
+在线体验：访问 Web Playground 即可在浏览器中编辑和预览图表。
+
+本地运行：
+
+```bash
+# 一键构建并启动开发服务器
+./build.sh dev
+
+# 或手动构建
+./build.sh web
+cd web && pnpm run dev
+```
+
+### 命令行工具
+
+安装：
 
 ```bash
 cargo install --path .
 ```
 
-## 使用
+使用：
 
 ```bash
 # 文件 → 文件
@@ -94,8 +113,46 @@ src/
 ├── render/         # IR → SVG 输出
 ├── style/          # 默认主题常量
 ├── lib.rs          # 公共 API: process(input) → SVG string
-└── main.rs         # CLI 入口 (clap)
+├── main.rs         # CLI 入口 (clap)
+└── wasm.rs         # WASM 绑定 (wasm-bindgen)
+
+web/
+├── src/
+│   ├── lib/
+│   │   ├── components/   # Svelte 组件 (Editor, Preview, 对话框等)
+│   │   ├── stores/       # 状态管理 (文件、主题、快捷键)
+│   │   ├── styles/       # 主题定义
+│   │   ├── wasm.ts       # WASM 加载器
+│   │   └── pkg/          # WASM 构建输出 (构建时生成)
+│   └── routes/
+│       └── +page.svelte  # 主页面
+└── build/                # 静态站点输出
 ```
+
+## 构建
+
+```bash
+./build.sh         # 测试 + CLI + WASM + Web 静态站点
+./build.sh cli     # 仅 CLI
+./build.sh wasm    # 仅 WASM
+./build.sh web     # WASM + Web 静态站点
+./build.sh dev     # WASM + 启动开发服务器
+./build.sh test    # 仅测试
+```
+
+## 技术栈
+
+### Rust
+- **lexpr** - S-expression 解析
+- **reingold-tilford** - 树布局算法
+- **svg** - SVG 生成
+- **clap** - CLI 参数解析
+- **wasm-bindgen** - WASM 绑定
+
+### Web
+- **SvelteKit** - Web 框架
+- **CodeMirror 6** - 代码编辑器
+- **Vite** - 构建工具
 
 ## License
 
