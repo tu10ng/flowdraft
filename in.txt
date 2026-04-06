@@ -1,2 +1,1 @@
-(tree :down (a b ("部门" ("组长" "老员工" ("导师" "新员工"))) g))
-(line :straight "老员工" -> "新员工" :desc "有关系")
+(flow :right (a -> b) (b -> c -> d) (b -> e) (a -> f)) (line d -> f :desc "心跳同步")

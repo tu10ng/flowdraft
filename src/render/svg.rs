@@ -2,7 +2,7 @@
 use svg::node::element::{self, path::Data, Definitions, Marker, Rectangle, Text};
 use svg::Document;
 
-use crate::ir::{DiagramIR, Edge, Node};
+use crate::ir::{DiagramIR, Edge, EdgeStyle, Node};
 use crate::parse::Arrow;
 use crate::style::defaults::*;
 
@@ -42,6 +42,25 @@ pub fn render_svg(ir: &DiagramIR) -> String {
                 (ir.nodes.get(parent_id), ir.nodes.get(child_id))
             {
                 let edge_svg = render_tree_edge(parent, child, offset_x, offset_y);
+                doc = doc.add(edge_svg);
+            }
+        }
+    }
+
+    // Render flow edges
+    for flow_info in &ir.flow_graphs {
+        for (from_id, to_id, arrow) in &flow_info.adjacency {
+            if let (Some(from_node), Some(to_node)) =
+                (ir.nodes.get(from_id), ir.nodes.get(to_id))
+            {
+                let edge = Edge {
+                    from: from_id.clone(),
+                    to: to_id.clone(),
+                    arrow: *arrow,
+                    label: None,
+                    style: EdgeStyle::default(),
+                };
+                let edge_svg = render_edge(from_node, to_node, &edge, offset_x, offset_y);
                 doc = doc.add(edge_svg);
             }
         }

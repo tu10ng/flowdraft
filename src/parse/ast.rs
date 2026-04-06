@@ -23,6 +23,10 @@ pub enum Form {
         target: String,
         props: Vec<(String, String)>,
     },
+    Flow {
+        direction: Direction,
+        chains: Vec<FlowChain>,
+    },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -51,4 +55,15 @@ pub struct TreeNode {
     pub name: String,
     pub label: Option<String>,
     pub children: Vec<TreeNode>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct FlowChain {
+    pub segments: Vec<FlowSegment>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct FlowSegment {
+    pub node: String,
+    pub arrow: Option<Arrow>, // None for last node in chain
 }

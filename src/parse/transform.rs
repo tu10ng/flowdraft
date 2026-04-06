@@ -34,6 +34,7 @@ fn parse_form(value: &Value) -> Result<Form> {
         "tree" => parse_tree_form(value),
         "line" => parse_line_form(value),
         "style" => parse_style_form(value),
+        "flow" => parse_flow_form(value),
         other => bail!("unknown command: {}", other),
     }
 }
@@ -249,6 +250,70 @@ fn parse_style_form(value: &Value) -> Result<Form> {
     Ok(Form::Style { target, props })
 }
 
+fn parse_flow_form(value: &Value) -> Result<Form> {
+    let items = collect_list(value);
+    // items[0] = "flow", then direction keyword, then chain sub-lists
+    let mut direction = Direction::Right;
+    let mut chains = Vec::new();
+
+    let mut i = 1;
+    while i < items.len() {
+        if let Some(kw) = items[i].as_keyword() {
+            match kw {
+                "down" => direction = Direction::Down,
+                "right" => direction = Direction::Right,
+                _ => {}
+            }
+            i += 1;
+        } else if items[i].as_cons().is_some() {
+            chains.push(parse_flow_chain(items[i])?);
+            i += 1;
+        } else {
+            i += 1;
+        }
+    }
+
+    if chains.is_empty() {
+        bail!("flow form has no chains");
+    }
+
+    Ok(Form::Flow { direction, chains })
+}
+
+fn parse_flow_chain(value: &Value) -> Result<FlowChain> {
+    let items = collect_list(value);
+    let mut segments = Vec::new();
+
+    let mut i = 0;
+    while i < items.len() {
+        let name = value_to_name(items[i])
+            .ok_or_else(|| anyhow!("expected node name in flow chain, got: {}", items[i]))?;
+
+        if is_arrow_symbol(items[i]) {
+            // skip stray arrows
+            i += 1;
+            continue;
+        }
+
+        let arrow = if i + 1 < items.len() && is_arrow_symbol(items[i + 1]) {
+            let a = parse_arrow(items[i + 1].as_symbol().unwrap());
+            i += 2; // skip node + arrow
+            Some(a)
+        } else {
+            i += 1; // last node in chain
+            None
+        };
+
+        segments.push(FlowSegment { node: name, arrow });
+    }
+
+    if segments.is_empty() {
+        bail!("empty flow chain");
+    }
+
+    Ok(FlowChain { segments })
+}
+
 fn is_arrow(s: &str) -> bool {
     matches!(s, "->" | "<-" | "<->" | "--")
 }
@@ -410,6 +475,56 @@ mod tests {
                 assert_eq!(props[0], ("fill".to_string(), "#eee".to_string()));
             }
             _ => panic!("expected style form"),
+        }
+    }
+
+    #[test]
+    fn test_parse_flow_single_chain() {
+        let input = "(flow :right (a -> b))";
+        let doc = parse_document(input).unwrap();
+        match &doc.forms[0] {
+            Form::Flow { direction, chains } => {
+                assert_eq!(*direction, Direction::Right);
+                assert_eq!(chains.len(), 1);
+                assert_eq!(chains[0].segments.len(), 2);
+                assert_eq!(chains[0].segments[0].node, "a");
+                assert_eq!(chains[0].segments[0].arrow, Some(Arrow::Forward));
+                assert_eq!(chains[0].segments[1].node, "b");
+                assert_eq!(chains[0].segments[1].arrow, None);
+            }
+            _ => panic!("expected flow form"),
+        }
+    }
+
+    #[test]
+    fn test_parse_flow_multi_hop_chain() {
+        let input = "(flow :down (a -> b -> c -> d))";
+        let doc = parse_document(input).unwrap();
+        match &doc.forms[0] {
+            Form::Flow { direction, chains } => {
+                assert_eq!(*direction, Direction::Down);
+                assert_eq!(chains.len(), 1);
+                assert_eq!(chains[0].segments.len(), 4);
+                assert_eq!(chains[0].segments[0].node, "a");
+                assert_eq!(chains[0].segments[1].node, "b");
+                assert_eq!(chains[0].segments[2].node, "c");
+                assert_eq!(chains[0].segments[3].node, "d");
+                assert_eq!(chains[0].segments[3].arrow, None);
+            }
+            _ => panic!("expected flow form"),
+        }
+    }
+
+    #[test]
+    fn test_parse_flow_multiple_chains() {
+        let input = "(flow :right (a -> b) (b -> c -> d) (b -> e) (a -> f))";
+        let doc = parse_document(input).unwrap();
+        match &doc.forms[0] {
+            Form::Flow { direction, chains } => {
+                assert_eq!(*direction, Direction::Right);
+                assert_eq!(chains.len(), 4);
+            }
+            _ => panic!("expected flow form"),
         }
     }
 }

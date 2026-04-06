@@ -16,6 +16,7 @@ pub fn build_ir(doc: &Document) -> Result<DiagramIR> {
     let mut nodes: HashMap<String, Node> = HashMap::new();
     let mut edges: Vec<Edge> = Vec::new();
     let mut tree_roots: Vec<TreeInfo> = Vec::new();
+    let mut flow_graphs: Vec<FlowInfo> = Vec::new();
 
     for form in &doc.forms {
         match form {
@@ -63,6 +64,40 @@ pub fn build_ir(doc: &Document) -> Result<DiagramIR> {
                     style: edge_style,
                 });
             }
+            Form::Flow { direction, chains } => {
+                let mut adjacency = Vec::new();
+                let mut node_order = Vec::new();
+                for chain in chains {
+                    for seg in &chain.segments {
+                        if !node_order.contains(&seg.node) {
+                            node_order.push(seg.node.clone());
+                        }
+                        nodes.entry(seg.node.clone()).or_insert_with(|| {
+                            let width = estimate_node_width(&seg.node);
+                            Node {
+                                id: seg.node.clone(),
+                                label: seg.node.clone(),
+                                x: 0.0,
+                                y: 0.0,
+                                width,
+                                height: NODE_HEIGHT,
+                                style: NodeStyle::default(),
+                            }
+                        });
+                    }
+                    // Extract edges from consecutive segments
+                    for w in chain.segments.windows(2) {
+                        if let Some(arrow) = w[0].arrow {
+                            adjacency.push((w[0].node.clone(), w[1].node.clone(), arrow));
+                        }
+                    }
+                }
+                flow_graphs.push(FlowInfo {
+                    direction: *direction,
+                    adjacency,
+                    node_order,
+                });
+            }
             Form::Style { target, props } => {
                 if let Some(node) = nodes.get_mut(target) {
                     for (k, v) in props {
@@ -81,6 +116,7 @@ pub fn build_ir(doc: &Document) -> Result<DiagramIR> {
         nodes,
         edges,
         tree_roots,
+        flow_graphs,
     })
 }
 
@@ -153,5 +189,28 @@ mod tests {
         let w = estimate_node_width("研发部");
         // CJK chars are width 2 each, so 6 * 9 + 20 = 74, but min is 80
         assert!(w >= 80.0);
+    }
+
+    #[test]
+    fn test_build_ir_flow() {
+        let doc = parse_document("(flow :right (a -> b) (b -> c -> d) (b -> e))").unwrap();
+        let ir = build_ir(&doc).unwrap();
+        assert_eq!(ir.flow_graphs.len(), 1);
+        let fg = &ir.flow_graphs[0];
+        assert_eq!(fg.node_order, vec!["a", "b", "c", "d", "e"]);
+        assert_eq!(fg.adjacency.len(), 4); // a->b, b->c, c->d, b->e
+        // All nodes created
+        assert_eq!(ir.nodes.len(), 5);
+        assert!(ir.nodes.contains_key("a"));
+        assert!(ir.nodes.contains_key("e"));
+    }
+
+    #[test]
+    fn test_build_ir_flow_shared_nodes() {
+        let doc = parse_document("(flow :right (a -> b) (a -> c) (b -> d) (c -> d))").unwrap();
+        let ir = build_ir(&doc).unwrap();
+        // d appears in two chains but should only be one node
+        assert_eq!(ir.nodes.len(), 4);
+        assert_eq!(ir.flow_graphs[0].adjacency.len(), 4);
     }
 }
