@@ -25,6 +25,7 @@ pub enum Form {
     },
     Flow {
         direction: Direction,
+        options: Vec<(String, Option<String>)>,
         chains: Vec<FlowChain>,
     },
 }

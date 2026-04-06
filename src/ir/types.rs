@@ -22,6 +22,7 @@ pub struct FlowInfo {
     pub direction: crate::parse::Direction,
     pub adjacency: Vec<(String, String, crate::parse::Arrow)>, // (from, to, arrow)
     pub node_order: Vec<String>, // declaration order for deterministic layout
+    pub line_aware: bool, // reorder children to avoid line crossings, default true
 }
 
 #[derive(Debug, Clone)]

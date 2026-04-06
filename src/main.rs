@@ -5,6 +5,8 @@ use std::path::PathBuf;
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
 
+use flowdraft::ProcessOptions;
+
 #[derive(Parser)]
 #[command(name = "flowdraft", about = "Render diagrams from Lisp-style DSL to SVG")]
 struct Cli {
@@ -14,6 +16,10 @@ struct Cli {
     /// Output SVG file (writes to stdout if omitted)
     #[arg(short, long)]
     output: Option<PathBuf>,
+
+    /// Disable line-aware child ordering in flow layout
+    #[arg(long)]
+    no_line_aware: bool,
 
     #[command(subcommand)]
     command: Option<Commands>,
@@ -35,10 +41,14 @@ fn main() -> Result<()> {
     let cli = Cli::parse();
 
     match cli.command {
-        Some(Commands::Watch { input, output }) => watch_mode(&input, output.as_deref())?,
+        Some(Commands::Watch { input, output }) => {
+            let opts = ProcessOptions { no_line_aware: cli.no_line_aware };
+            watch_mode(&input, output.as_deref(), &opts)?
+        }
         None => {
             let content = read_input(cli.input.as_deref())?;
-            let svg = flowdraft::process(&content)?;
+            let opts = ProcessOptions { no_line_aware: cli.no_line_aware };
+            let svg = flowdraft::process_with_options(&content, &opts)?;
             write_output(cli.output.as_deref(), &svg)?;
         }
     }
@@ -71,7 +81,7 @@ fn write_output(path: Option<&std::path::Path>, content: &str) -> Result<()> {
     }
 }
 
-fn watch_mode(input: &std::path::Path, output: Option<&std::path::Path>) -> Result<()> {
+fn watch_mode(input: &std::path::Path, output: Option<&std::path::Path>, opts: &ProcessOptions) -> Result<()> {
     use std::sync::mpsc;
     use std::time::Duration;
 
@@ -81,7 +91,7 @@ fn watch_mode(input: &std::path::Path, output: Option<&std::path::Path>) -> Resu
 
     // Initial render
     let content = fs::read_to_string(input)?;
-    match flowdraft::process(&content) {
+    match flowdraft::process_with_options(&content, opts) {
         Ok(svg) => {
             fs::write(&output_path, &svg)?;
             eprintln!("Rendered → {}", output_path.display());
@@ -101,7 +111,7 @@ fn watch_mode(input: &std::path::Path, output: Option<&std::path::Path>) -> Resu
         match rx.recv() {
             Ok(Ok(_events)) => {
                 let content = fs::read_to_string(input)?;
-                match flowdraft::process(&content) {
+                match flowdraft::process_with_options(&content, opts) {
                     Ok(svg) => {
                         fs::write(&output_path, &svg)?;
                         eprintln!("Rendered → {}", output_path.display());

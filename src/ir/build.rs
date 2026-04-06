@@ -64,7 +64,7 @@ pub fn build_ir(doc: &Document) -> Result<DiagramIR> {
                     style: edge_style,
                 });
             }
-            Form::Flow { direction, chains } => {
+            Form::Flow { direction, options, chains } => {
                 let mut adjacency = Vec::new();
                 let mut node_order = Vec::new();
                 for chain in chains {
@@ -92,10 +92,12 @@ pub fn build_ir(doc: &Document) -> Result<DiagramIR> {
                         }
                     }
                 }
+                let line_aware = !options.iter().any(|(k, _)| k == "no-line-aware");
                 flow_graphs.push(FlowInfo {
                     direction: *direction,
                     adjacency,
                     node_order,
+                    line_aware,
                 });
             }
             Form::Style { target, props } => {

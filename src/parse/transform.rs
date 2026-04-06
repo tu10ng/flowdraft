@@ -254,6 +254,7 @@ fn parse_flow_form(value: &Value) -> Result<Form> {
     let items = collect_list(value);
     // items[0] = "flow", then direction keyword, then chain sub-lists
     let mut direction = Direction::Right;
+    let mut options = Vec::new();
     let mut chains = Vec::new();
 
     let mut i = 1;
@@ -262,6 +263,7 @@ fn parse_flow_form(value: &Value) -> Result<Form> {
             match kw {
                 "down" => direction = Direction::Down,
                 "right" => direction = Direction::Right,
+                "no-line-aware" => options.push(("no-line-aware".to_string(), None)),
                 _ => {}
             }
             i += 1;
@@ -277,7 +279,7 @@ fn parse_flow_form(value: &Value) -> Result<Form> {
         bail!("flow form has no chains");
     }
 
-    Ok(Form::Flow { direction, chains })
+    Ok(Form::Flow { direction, options, chains })
 }
 
 fn parse_flow_chain(value: &Value) -> Result<FlowChain> {
@@ -483,7 +485,7 @@ mod tests {
         let input = "(flow :right (a -> b))";
         let doc = parse_document(input).unwrap();
         match &doc.forms[0] {
-            Form::Flow { direction, chains } => {
+            Form::Flow { direction, chains, .. } => {
                 assert_eq!(*direction, Direction::Right);
                 assert_eq!(chains.len(), 1);
                 assert_eq!(chains[0].segments.len(), 2);
@@ -501,7 +503,7 @@ mod tests {
         let input = "(flow :down (a -> b -> c -> d))";
         let doc = parse_document(input).unwrap();
         match &doc.forms[0] {
-            Form::Flow { direction, chains } => {
+            Form::Flow { direction, chains, .. } => {
                 assert_eq!(*direction, Direction::Down);
                 assert_eq!(chains.len(), 1);
                 assert_eq!(chains[0].segments.len(), 4);
@@ -520,7 +522,7 @@ mod tests {
         let input = "(flow :right (a -> b) (b -> c -> d) (b -> e) (a -> f))";
         let doc = parse_document(input).unwrap();
         match &doc.forms[0] {
-            Form::Flow { direction, chains } => {
+            Form::Flow { direction, chains, .. } => {
                 assert_eq!(*direction, Direction::Right);
                 assert_eq!(chains.len(), 4);
             }
