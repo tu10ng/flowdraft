@@ -1,0 +1,15 @@
+(tree :down
+  (ceo :label "CEO"
+    (dev :label "研发部"
+      (fe :label "前端")
+      (be :label "后端")
+      (qa :label "测试"))
+    (pm :label "产品部")
+    (hr :label "人力资源")))
+
+(line :straight fe -> be :desc "协作" :color "#4a90d9")
+
+(style ceo :fill "#e8f4fd" :stroke "#2196f3")
+(style dev :fill "#e8f5e9" :stroke "#4caf50")
+(style pm :fill "#fff3e0" :stroke "#ff9800")
+(style hr :fill "#fce4ec" :stroke "#e91e63")

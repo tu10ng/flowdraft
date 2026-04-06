@@ -1,0 +1,63 @@
+<svg height="260" viewBox="0 0 472 260" width="472" xmlns="http://www.w3.org/2000/svg">
+<defs>
+<marker id="arrow-forward" markerHeight="8" markerWidth="8" orient="auto-start-reverse" refX="10" refY="5" viewBox="0 0 10 10">
+<path d="M0,0 L10,5 L0,10" fill="#555555"/>
+</marker>
+<marker id="arrow-backward" markerHeight="8" markerWidth="8" orient="auto-start-reverse" refX="0" refY="5" viewBox="0 0 10 10">
+<path d="M10,0 L0,5 L10,10" fill="#555555"/>
+</marker>
+</defs>
+<rect fill="#fafafa" height="100%" width="100%"/>
+<path d="M283,80 L283,95 L280,95 L280,110" fill="none" stroke="#555555" stroke-width="1.5"/>
+<path d="M283,80 L283,95 L180,95 L180,110" fill="none" stroke="#555555" stroke-width="1.5"/>
+<path d="M180,150 L180,165 L80,165 L80,180" fill="none" stroke="#555555" stroke-width="1.5"/>
+<path d="M283,80 L283,95 L386,95 L386,110" fill="none" stroke="#555555" stroke-width="1.5"/>
+<path d="M180,150 L180,165 L180,165 L180,180" fill="none" stroke="#555555" stroke-width="1.5"/>
+<path d="M180,150 L180,165 L280,165 L280,180" fill="none" stroke="#555555" stroke-width="1.5"/>
+<line marker-end="url(#arrow-forward)" stroke="#4a90d9" stroke-width="1.5" x1="120" x2="140" y1="200" y2="200"/>
+<text fill="#4a90d9" font-family="system-ui, -apple-system, sans-serif" font-size="11.9" text-anchor="middle" x="130" y="194">
+协作
+</text>
+<rect fill="#e8f5e9" height="40" rx="6" ry="6" stroke="#4caf50" stroke-width="1.5" width="80" x="140" y="110"/>
+<g>
+<text fill="#333333" font-family="system-ui, -apple-system, sans-serif" font-size="14" text-anchor="middle" x="180" y="134.66666666666666">
+研发部
+</text>
+</g>
+<rect fill="#ffffff" height="40" rx="6" ry="6" stroke="#333333" stroke-width="1.5" width="80" x="140" y="180"/>
+<g>
+<text fill="#333333" font-family="system-ui, -apple-system, sans-serif" font-size="14" text-anchor="middle" x="180" y="204.66666666666666">
+后端
+</text>
+</g>
+<rect fill="#ffffff" height="40" rx="6" ry="6" stroke="#333333" stroke-width="1.5" width="80" x="240" y="180"/>
+<g>
+<text fill="#333333" font-family="system-ui, -apple-system, sans-serif" font-size="14" text-anchor="middle" x="280" y="204.66666666666666">
+测试
+</text>
+</g>
+<rect fill="#fff3e0" height="40" rx="6" ry="6" stroke="#ff9800" stroke-width="1.5" width="80" x="240" y="110"/>
+<g>
+<text fill="#333333" font-family="system-ui, -apple-system, sans-serif" font-size="14" text-anchor="middle" x="280" y="134.66666666666666">
+产品部
+</text>
+</g>
+<rect fill="#fce4ec" height="40" rx="6" ry="6" stroke="#e91e63" stroke-width="1.5" width="92" x="340" y="110"/>
+<g>
+<text fill="#333333" font-family="system-ui, -apple-system, sans-serif" font-size="14" text-anchor="middle" x="386" y="134.66666666666666">
+人力资源
+</text>
+</g>
+<rect fill="#ffffff" height="40" rx="6" ry="6" stroke="#333333" stroke-width="1.5" width="80" x="40" y="180"/>
+<g>
+<text fill="#333333" font-family="system-ui, -apple-system, sans-serif" font-size="14" text-anchor="middle" x="80" y="204.66666666666666">
+前端
+</text>
+</g>
+<rect fill="#e8f4fd" height="40" rx="6" ry="6" stroke="#2196f3" stroke-width="1.5" width="80" x="243" y="40"/>
+<g>
+<text fill="#333333" font-family="system-ui, -apple-system, sans-serif" font-size="14" text-anchor="middle" x="283" y="64.66666666666667">
+CEO
+</text>
+</g>
+</svg>
