@@ -61,7 +61,7 @@ jobs:
         run: wasm-pack build --target web --features wasm --no-default-features
 
       - name: Copy WASM to web
-        run: cp -r pkg/* web/src/lib/pkg/
+        run: mkdir -p web/src/lib/pkg && cp -r pkg/* web/src/lib/pkg/
 
       - uses: pnpm/action-setup@v4
         with:
