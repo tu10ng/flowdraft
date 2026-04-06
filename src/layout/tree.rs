@@ -8,9 +8,6 @@ use crate::ir::{DiagramIR, TreeInfo};
 use crate::parse::Direction;
 use super::Layout;
 
-const H_GAP: f64 = 20.0;
-const V_GAP: f64 = 30.0;
-
 /// Temporary tree structure for the RT algorithm.
 struct RTNode {
     id: String,
@@ -19,7 +16,10 @@ struct RTNode {
     half_height: f64,
 }
 
-struct RTTree;
+struct RTTree {
+    h_gap: f64,
+    v_gap: f64,
+}
 
 impl<'a> NodeInfo<&'a RTNode> for RTTree {
     type Key = String;
@@ -43,21 +43,25 @@ impl<'a> NodeInfo<&'a RTNode> for RTTree {
 
     fn border(&self, _node: &'a RTNode) -> Dimensions {
         Dimensions {
-            top: V_GAP / 2.0,
-            bottom: V_GAP / 2.0,
-            left: H_GAP / 2.0,
-            right: H_GAP / 2.0,
+            top: self.v_gap / 2.0,
+            bottom: self.v_gap / 2.0,
+            left: self.h_gap / 2.0,
+            right: self.h_gap / 2.0,
         }
     }
 }
 
-pub struct TreeLayout;
+pub struct TreeLayout {
+    pub h_gap: f64,
+    pub v_gap: f64,
+}
 
 impl Layout for TreeLayout {
     fn apply(&self, ir: &mut DiagramIR) -> Result<()> {
+        let rt_tree = RTTree { h_gap: self.h_gap, v_gap: self.v_gap };
         for tree_info in &ir.tree_roots.clone() {
             let rt_root = build_rt_tree(&tree_info.root, tree_info, &ir.nodes)?;
-            let coords = reingold_tilford::layout(&RTTree, &rt_root);
+            let coords = reingold_tilford::layout(&rt_tree, &rt_root);
             apply_coords(ir, &coords, tree_info.direction);
         }
         Ok(())

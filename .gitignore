@@ -1,1 +1,4 @@
 /target
+/pkg
+/web/build
+/web/src/lib/pkg

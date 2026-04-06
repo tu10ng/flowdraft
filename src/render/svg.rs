@@ -4,12 +4,23 @@ use svg::Document;
 
 use crate::ir::{DiagramIR, Edge, EdgeStyle, Node};
 use crate::parse::Arrow;
-use crate::style::defaults::*;
+use crate::style::Theme;
+use super::Renderer;
 
-pub fn render_svg(ir: &DiagramIR) -> String {
+pub struct SvgRenderer;
+
+impl Renderer for SvgRenderer {
+    type Output = String;
+
+    fn render(&self, ir: &DiagramIR, theme: &Theme) -> String {
+        render_svg(ir, theme)
+    }
+}
+
+pub fn render_svg(ir: &DiagramIR, theme: &Theme) -> String {
     // Calculate bounding box
     let (min_x, min_y, max_x, max_y) = bounding_box(ir);
-    let padding = SVG_PADDING;
+    let padding = theme.svg_padding;
     let width = max_x - min_x + padding * 2.0;
     let height = max_y - min_y + padding * 2.0;
     let offset_x = -min_x + padding;
@@ -23,8 +34,8 @@ pub fn render_svg(ir: &DiagramIR) -> String {
 
     // Add arrow marker definitions
     let defs = Definitions::new()
-        .add(arrow_marker("arrow-forward", false))
-        .add(arrow_marker("arrow-backward", true));
+        .add(arrow_marker("arrow-forward", false, &theme.edge_color))
+        .add(arrow_marker("arrow-backward", true, &theme.edge_color));
     doc = doc.add(defs);
 
     // Add a background
@@ -32,7 +43,7 @@ pub fn render_svg(ir: &DiagramIR) -> String {
         Rectangle::new()
             .set("width", "100%")
             .set("height", "100%")
-            .set("fill", BG_COLOR),
+            .set("fill", theme.bg_color.as_str()),
     );
 
     // Render tree edges (parent-child connections)
@@ -41,7 +52,7 @@ pub fn render_svg(ir: &DiagramIR) -> String {
             if let (Some(parent), Some(child)) =
                 (ir.nodes.get(parent_id), ir.nodes.get(child_id))
             {
-                let edge_svg = render_tree_edge(parent, child, offset_x, offset_y);
+                let edge_svg = render_tree_edge(parent, child, offset_x, offset_y, theme);
                 doc = doc.add(edge_svg);
             }
         }
@@ -60,7 +71,7 @@ pub fn render_svg(ir: &DiagramIR) -> String {
                     label: None,
                     style: EdgeStyle::default(),
                 };
-                let edge_svg = render_edge(from_node, to_node, &edge, offset_x, offset_y);
+                let edge_svg = render_edge(from_node, to_node, &edge, offset_x, offset_y, theme);
                 doc = doc.add(edge_svg);
             }
         }
@@ -71,10 +82,10 @@ pub fn render_svg(ir: &DiagramIR) -> String {
         if let (Some(from_node), Some(to_node)) =
             (ir.nodes.get(&edge.from), ir.nodes.get(&edge.to))
         {
-            let edge_svg = render_edge(from_node, to_node, edge, offset_x, offset_y);
+            let edge_svg = render_edge(from_node, to_node, edge, offset_x, offset_y, theme);
             doc = doc.add(edge_svg);
             if let Some(ref label) = edge.label {
-                let label_svg = render_edge_label(from_node, to_node, label, edge, offset_x, offset_y);
+                let label_svg = render_edge_label(from_node, to_node, label, edge, offset_x, offset_y, theme);
                 doc = doc.add(label_svg);
             }
         }
@@ -82,7 +93,7 @@ pub fn render_svg(ir: &DiagramIR) -> String {
 
     // Render nodes
     for node in ir.nodes.values() {
-        let (rect, text) = render_node(node, offset_x, offset_y);
+        let (rect, text) = render_node(node, offset_x, offset_y, theme);
         doc = doc.add(rect);
         doc = doc.add(text);
     }
@@ -118,6 +129,7 @@ fn render_node(
     node: &Node,
     offset_x: f64,
     offset_y: f64,
+    theme: &Theme,
 ) -> (element::Rectangle, element::Group) {
     let x = node.x + offset_x - node.width / 2.0;
     let y = node.y + offset_y - node.height / 2.0;
@@ -126,31 +138,31 @@ fn render_node(
         .style
         .fill
         .as_deref()
-        .unwrap_or(NODE_FILL);
+        .unwrap_or(&theme.node_fill);
     let stroke = node
         .style
         .stroke
         .as_deref()
-        .unwrap_or(NODE_STROKE);
+        .unwrap_or(&theme.node_stroke);
 
     let rect = element::Rectangle::new()
         .set("x", x)
         .set("y", y)
         .set("width", node.width)
         .set("height", node.height)
-        .set("rx", NODE_CORNER_RADIUS)
-        .set("ry", NODE_CORNER_RADIUS)
+        .set("rx", theme.node_corner_radius)
+        .set("ry", theme.node_corner_radius)
         .set("fill", fill)
         .set("stroke", stroke)
-        .set("stroke-width", NODE_STROKE_WIDTH);
+        .set("stroke-width", theme.node_stroke_width);
 
     let text = Text::new(&node.label)
         .set("x", node.x + offset_x)
-        .set("y", node.y + offset_y + FONT_SIZE / 3.0) // approximate vertical centering
+        .set("y", node.y + offset_y + theme.font_size / 3.0) // approximate vertical centering
         .set("text-anchor", "middle")
-        .set("font-family", FONT_FAMILY)
-        .set("font-size", FONT_SIZE)
-        .set("fill", TEXT_COLOR);
+        .set("font-family", theme.font_family.as_str())
+        .set("font-size", theme.font_size)
+        .set("fill", theme.text_color.as_str());
 
     let group = element::Group::new().add(text);
 
@@ -162,6 +174,7 @@ fn render_tree_edge(
     child: &Node,
     offset_x: f64,
     offset_y: f64,
+    theme: &Theme,
 ) -> element::Path {
     let px = parent.x + offset_x;
     let py = parent.y + offset_y + parent.height / 2.0;
@@ -178,8 +191,8 @@ fn render_tree_edge(
     element::Path::new()
         .set("d", data)
         .set("fill", "none")
-        .set("stroke", EDGE_COLOR)
-        .set("stroke-width", EDGE_STROKE_WIDTH)
+        .set("stroke", theme.edge_color.as_str())
+        .set("stroke-width", theme.edge_stroke_width)
 }
 
 fn render_edge(
@@ -188,12 +201,13 @@ fn render_edge(
     edge: &Edge,
     offset_x: f64,
     offset_y: f64,
+    theme: &Theme,
 ) -> element::Line {
     let color = edge
         .style
         .color
         .as_deref()
-        .unwrap_or(EDGE_COLOR);
+        .unwrap_or(&theme.edge_color);
 
     // Connect from edge of nodes
     let (fx, fy) = edge_point(from, to, offset_x, offset_y);
@@ -205,7 +219,7 @@ fn render_edge(
         .set("x2", tx)
         .set("y2", ty)
         .set("stroke", color)
-        .set("stroke-width", EDGE_STROKE_WIDTH);
+        .set("stroke-width", theme.edge_stroke_width);
 
     match edge.arrow {
         Arrow::Forward => {
@@ -231,12 +245,13 @@ fn render_edge_label(
     edge: &Edge,
     offset_x: f64,
     offset_y: f64,
+    theme: &Theme,
 ) -> element::Text {
     let color = edge
         .style
         .color
         .as_deref()
-        .unwrap_or(TEXT_COLOR);
+        .unwrap_or(&theme.text_color);
 
     let mx = (from.x + to.x) / 2.0 + offset_x;
     let my = (from.y + to.y) / 2.0 + offset_y - 6.0;
@@ -245,8 +260,8 @@ fn render_edge_label(
         .set("x", mx)
         .set("y", my)
         .set("text-anchor", "middle")
-        .set("font-family", FONT_FAMILY)
-        .set("font-size", FONT_SIZE * 0.85)
+        .set("font-family", theme.font_family.as_str())
+        .set("font-size", theme.font_size * 0.85)
         .set("fill", color)
 }
 
@@ -274,7 +289,7 @@ fn edge_point(node: &Node, target: &Node, offset_x: f64, offset_y: f64) -> (f64,
     (nx + dx * scale, ny + dy * scale)
 }
 
-fn arrow_marker(id: &str, reversed: bool) -> Marker {
+fn arrow_marker(id: &str, reversed: bool, edge_color: &str) -> Marker {
     let path = if reversed {
         Data::new().move_to((10, 0)).line_to((0, 5)).line_to((10, 10))
     } else {
@@ -292,6 +307,6 @@ fn arrow_marker(id: &str, reversed: bool) -> Marker {
         .add(
             element::Path::new()
                 .set("d", path)
-                .set("fill", EDGE_COLOR),
+                .set("fill", edge_color),
         )
 }

@@ -17,18 +17,6 @@
 <text fill="#333333" font-family="system-ui, -apple-system, sans-serif" font-size="11.9" text-anchor="middle" x="280" y="159">
 心跳同步
 </text>
-<rect fill="#ffffff" height="40" rx="6" ry="6" stroke="#333333" stroke-width="1.5" width="80" x="40" y="110"/>
-<g>
-<text fill="#333333" font-family="system-ui, -apple-system, sans-serif" font-size="14" text-anchor="middle" x="80" y="134.66666666666666">
-a
-</text>
-</g>
-<rect fill="#ffffff" height="40" rx="6" ry="6" stroke="#333333" stroke-width="1.5" width="80" x="140" y="180"/>
-<g>
-<text fill="#333333" font-family="system-ui, -apple-system, sans-serif" font-size="14" text-anchor="middle" x="180" y="204.66666666666666">
-f
-</text>
-</g>
 <rect fill="#ffffff" height="40" rx="6" ry="6" stroke="#333333" stroke-width="1.5" width="80" x="140" y="75"/>
 <g>
 <text fill="#333333" font-family="system-ui, -apple-system, sans-serif" font-size="14" text-anchor="middle" x="180" y="99.66666666666667">
@@ -39,6 +27,18 @@ b
 <g>
 <text fill="#333333" font-family="system-ui, -apple-system, sans-serif" font-size="14" text-anchor="middle" x="280" y="64.66666666666667">
 e
+</text>
+</g>
+<rect fill="#ffffff" height="40" rx="6" ry="6" stroke="#333333" stroke-width="1.5" width="80" x="40" y="110"/>
+<g>
+<text fill="#333333" font-family="system-ui, -apple-system, sans-serif" font-size="14" text-anchor="middle" x="80" y="134.66666666666666">
+a
+</text>
+</g>
+<rect fill="#ffffff" height="40" rx="6" ry="6" stroke="#333333" stroke-width="1.5" width="80" x="140" y="180"/>
+<g>
+<text fill="#333333" font-family="system-ui, -apple-system, sans-serif" font-size="14" text-anchor="middle" x="180" y="204.66666666666666">
+f
 </text>
 </g>
 <rect fill="#ffffff" height="40" rx="6" ry="6" stroke="#333333" stroke-width="1.5" width="80" x="240" y="110"/>

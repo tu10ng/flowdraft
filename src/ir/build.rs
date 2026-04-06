@@ -5,14 +5,10 @@ use anyhow::{bail, Result};
 use unicode_width::UnicodeWidthStr;
 
 use crate::parse::*;
+use crate::style::Theme;
 use super::types::*;
 
-const NODE_HEIGHT: f64 = 40.0;
-const CHAR_WIDTH: f64 = 9.0;
-const NODE_PADDING: f64 = 20.0;
-const MIN_NODE_WIDTH: f64 = 80.0;
-
-pub fn build_ir(doc: &Document) -> Result<DiagramIR> {
+pub fn build_ir(doc: &Document, theme: &Theme) -> Result<DiagramIR> {
     let mut nodes: HashMap<String, Node> = HashMap::new();
     let mut edges: Vec<Edge> = Vec::new();
     let mut tree_roots: Vec<TreeInfo> = Vec::new();
@@ -23,7 +19,7 @@ pub fn build_ir(doc: &Document) -> Result<DiagramIR> {
             Form::Tree { direction, root, .. } => {
                 let mut parent_map = HashMap::new();
                 let mut children_order = HashMap::new();
-                collect_tree_nodes(root, &mut nodes, &mut parent_map, &mut children_order);
+                collect_tree_nodes(root, &mut nodes, &mut parent_map, &mut children_order, theme);
                 tree_roots.push(TreeInfo {
                     root: root.name.clone(),
                     direction: *direction,
@@ -73,14 +69,14 @@ pub fn build_ir(doc: &Document) -> Result<DiagramIR> {
                             node_order.push(seg.node.clone());
                         }
                         nodes.entry(seg.node.clone()).or_insert_with(|| {
-                            let width = estimate_node_width(&seg.node);
+                            let width = estimate_node_width(&seg.node, theme.char_width, theme.node_padding, theme.min_node_width);
                             Node {
                                 id: seg.node.clone(),
                                 label: seg.node.clone(),
                                 x: 0.0,
                                 y: 0.0,
                                 width,
-                                height: NODE_HEIGHT,
+                                height: theme.node_height,
                                 style: NodeStyle::default(),
                             }
                         });
@@ -122,9 +118,9 @@ pub fn build_ir(doc: &Document) -> Result<DiagramIR> {
     })
 }
 
-fn estimate_node_width(label: &str) -> f64 {
+fn estimate_node_width(label: &str, char_width: f64, node_padding: f64, min_node_width: f64) -> f64 {
     let w = UnicodeWidthStr::width(label) as f64;
-    (w * CHAR_WIDTH + NODE_PADDING).max(MIN_NODE_WIDTH)
+    (w * char_width + node_padding).max(min_node_width)
 }
 
 fn collect_tree_nodes(
@@ -132,12 +128,13 @@ fn collect_tree_nodes(
     nodes: &mut HashMap<String, Node>,
     parent_map: &mut HashMap<String, String>,
     children_order: &mut HashMap<String, Vec<String>>,
+    theme: &Theme,
 ) {
     let label = tree_node
         .label
         .as_deref()
         .unwrap_or(&tree_node.name);
-    let width = estimate_node_width(label);
+    let width = estimate_node_width(label, theme.char_width, theme.node_padding, theme.min_node_width);
 
     nodes.entry(tree_node.name.clone()).or_insert_with(|| Node {
         id: tree_node.name.clone(),
@@ -145,7 +142,7 @@ fn collect_tree_nodes(
         x: 0.0,
         y: 0.0,
         width,
-        height: NODE_HEIGHT,
+        height: theme.node_height,
         style: NodeStyle::default(),
     });
 
@@ -156,7 +153,7 @@ fn collect_tree_nodes(
 
     for child in &tree_node.children {
         parent_map.insert(child.name.clone(), tree_node.name.clone());
-        collect_tree_nodes(child, nodes, parent_map, children_order);
+        collect_tree_nodes(child, nodes, parent_map, children_order, theme);
     }
 }
 
@@ -168,7 +165,7 @@ mod tests {
     #[test]
     fn test_build_ir_tree() {
         let doc = parse_document("(tree :down (a (b c d)))").unwrap();
-        let ir = build_ir(&doc).unwrap();
+        let ir = build_ir(&doc, &Theme::default()).unwrap();
         assert_eq!(ir.nodes.len(), 4);
         assert!(ir.nodes.contains_key("a"));
         assert!(ir.nodes.contains_key("b"));
@@ -179,7 +176,7 @@ mod tests {
     #[test]
     fn test_build_ir_with_line() {
         let doc = parse_document(r#"(tree :down (a (b c))) (line :straight b -> c :desc "test")"#).unwrap();
-        let ir = build_ir(&doc).unwrap();
+        let ir = build_ir(&doc, &Theme::default()).unwrap();
         assert_eq!(ir.edges.len(), 1);
         assert_eq!(ir.edges[0].from, "b");
         assert_eq!(ir.edges[0].to, "c");
@@ -188,7 +185,8 @@ mod tests {
 
     #[test]
     fn test_cjk_width() {
-        let w = estimate_node_width("研发部");
+        let theme = Theme::default();
+        let w = estimate_node_width("研发部", theme.char_width, theme.node_padding, theme.min_node_width);
         // CJK chars are width 2 each, so 6 * 9 + 20 = 74, but min is 80
         assert!(w >= 80.0);
     }
@@ -196,7 +194,7 @@ mod tests {
     #[test]
     fn test_build_ir_flow() {
         let doc = parse_document("(flow :right (a -> b) (b -> c -> d) (b -> e))").unwrap();
-        let ir = build_ir(&doc).unwrap();
+        let ir = build_ir(&doc, &Theme::default()).unwrap();
         assert_eq!(ir.flow_graphs.len(), 1);
         let fg = &ir.flow_graphs[0];
         assert_eq!(fg.node_order, vec!["a", "b", "c", "d", "e"]);
@@ -210,7 +208,7 @@ mod tests {
     #[test]
     fn test_build_ir_flow_shared_nodes() {
         let doc = parse_document("(flow :right (a -> b) (a -> c) (b -> d) (c -> d))").unwrap();
-        let ir = build_ir(&doc).unwrap();
+        let ir = build_ir(&doc, &Theme::default()).unwrap();
         // d appears in two chains but should only be one node
         assert_eq!(ir.nodes.len(), 4);
         assert_eq!(ir.flow_graphs[0].adjacency.len(), 4);

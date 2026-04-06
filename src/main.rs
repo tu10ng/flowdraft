@@ -42,12 +42,12 @@ fn main() -> Result<()> {
 
     match cli.command {
         Some(Commands::Watch { input, output }) => {
-            let opts = ProcessOptions { no_line_aware: cli.no_line_aware };
+            let opts = ProcessOptions { no_line_aware: cli.no_line_aware, ..Default::default() };
             watch_mode(&input, output.as_deref(), &opts)?
         }
         None => {
             let content = read_input(cli.input.as_deref())?;
-            let opts = ProcessOptions { no_line_aware: cli.no_line_aware };
+            let opts = ProcessOptions { no_line_aware: cli.no_line_aware, ..Default::default() };
             let svg = flowdraft::process_with_options(&content, &opts)?;
             write_output(cli.output.as_deref(), &svg)?;
         }

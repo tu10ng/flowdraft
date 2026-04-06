@@ -3,13 +3,31 @@ name = "flowdraft"
 version = "0.1.0"
 edition = "2021"
 
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[[bin]]
+name = "flowdraft"
+path = "src/main.rs"
+required-features = ["cli"]
+
+[features]
+default = ["cli"]
+cli = ["dep:clap", "dep:notify", "dep:notify-debouncer-mini"]
+wasm = ["dep:wasm-bindgen"]
+
 [dependencies]
 lexpr = "0.2"
 petgraph = "0.6"
 svg = "0.17"
-clap = { version = "4", features = ["derive"] }
-notify = "7"
-notify-debouncer-mini = "0.5"
 anyhow = "1"
 unicode-width = "0.2"
 reingold-tilford = "1.0"
+
+# CLI-only
+clap = { version = "4", features = ["derive"], optional = true }
+notify = { version = "7", optional = true }
+notify-debouncer-mini = { version = "0.5", optional = true }
+
+# WASM-only
+wasm-bindgen = { version = "0.2", optional = true }

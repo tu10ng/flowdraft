@@ -9,21 +9,21 @@ use crate::ir::DiagramIR;
 use crate::parse::Direction;
 use super::Layout;
 
-const H_GAP: f64 = 20.0;
-const V_GAP: f64 = 30.0;
-
-pub struct FlowLayout;
+pub struct FlowLayout {
+    pub h_gap: f64,
+    pub v_gap: f64,
+}
 
 impl Layout for FlowLayout {
     fn apply(&self, ir: &mut DiagramIR) -> Result<()> {
         for flow_info in &ir.flow_graphs.clone() {
-            layout_flow(ir, flow_info)?;
+            layout_flow(ir, flow_info, self.h_gap, self.v_gap)?;
         }
         Ok(())
     }
 }
 
-fn layout_flow(ir: &mut DiagramIR, flow_info: &crate::ir::FlowInfo) -> Result<()> {
+fn layout_flow(ir: &mut DiagramIR, flow_info: &crate::ir::FlowInfo, h_gap: f64, v_gap: f64) -> Result<()> {
     let mut graph = DiGraph::<String, ()>::new();
     let mut index_map: HashMap<String, NodeIndex> = HashMap::new();
 
@@ -181,6 +181,7 @@ fn layout_flow(ir: &mut DiagramIR, flow_info: &crate::ir::FlowInfo) -> Result<()
         ir: &DiagramIR,
         direction: &Direction,
         cache: &mut HashMap<String, f64>,
+        v_gap: f64,
     ) -> f64 {
         if let Some(&h) = cache.get(node) {
             return h;
@@ -198,9 +199,9 @@ fn layout_flow(ir: &mut DiagramIR, flow_info: &crate::ir::FlowInfo) -> Result<()
         } else {
             let sum: f64 = kids
                 .iter()
-                .map(|c| compute_subtree_height(c, children_map, ir, direction, cache))
+                .map(|c| compute_subtree_height(c, children_map, ir, direction, cache, v_gap))
                 .sum();
-            let gaps = V_GAP * (kids.len() as f64 - 1.0);
+            let gaps = v_gap * (kids.len() as f64 - 1.0);
             let children_span = sum + gaps;
             // Subtree must be at least as tall as the node itself
             children_span.max(node_cross_size)
@@ -216,6 +217,7 @@ fn layout_flow(ir: &mut DiagramIR, flow_info: &crate::ir::FlowInfo) -> Result<()
             ir,
             &flow_info.direction,
             &mut subtree_heights,
+            v_gap,
         );
     }
 
@@ -227,6 +229,7 @@ fn layout_flow(ir: &mut DiagramIR, flow_info: &crate::ir::FlowInfo) -> Result<()
         children_map: &HashMap<String, Vec<String>>,
         subtree_heights: &HashMap<String, f64>,
         cross_positions: &mut HashMap<String, f64>,
+        v_gap: f64,
     ) {
         let h = subtree_heights[node];
         // Center the node within its subtree band
@@ -238,7 +241,7 @@ fn layout_flow(ir: &mut DiagramIR, flow_info: &crate::ir::FlowInfo) -> Result<()
                 .iter()
                 .map(|c| subtree_heights[c.as_str()])
                 .sum::<f64>()
-                + V_GAP * (kids.len() as f64 - 1.0);
+                + v_gap * (kids.len() as f64 - 1.0);
             let mut cursor = top + (h - children_total) / 2.0;
             for child in kids {
                 let child_h = subtree_heights[child.as_str()];
@@ -248,8 +251,9 @@ fn layout_flow(ir: &mut DiagramIR, flow_info: &crate::ir::FlowInfo) -> Result<()
                     children_map,
                     subtree_heights,
                     cross_positions,
+                    v_gap,
                 );
-                cursor += child_h + V_GAP;
+                cursor += child_h + v_gap;
             }
         }
     }
@@ -263,8 +267,9 @@ fn layout_flow(ir: &mut DiagramIR, flow_info: &crate::ir::FlowInfo) -> Result<()
             &children_map,
             &subtree_heights,
             &mut cross_positions,
+            v_gap,
         );
-        cursor += h + V_GAP;
+        cursor += h + v_gap;
     }
 
     // 2d. Compute main-axis layer positions
@@ -286,7 +291,7 @@ fn layout_flow(ir: &mut DiagramIR, flow_info: &crate::ir::FlowInfo) -> Result<()
     let mut acc = 0.0_f64;
     for i in 0..=max_layer {
         layer_starts[i] = acc;
-        acc += layer_max_size[i] + H_GAP;
+        acc += layer_max_size[i] + h_gap;
     }
 
     // Phase 3: Apply coordinates

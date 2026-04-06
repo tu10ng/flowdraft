@@ -4,11 +4,25 @@ pub mod layout;
 pub mod render;
 pub mod style;
 
-use anyhow::Result;
+#[cfg(feature = "wasm")]
+pub mod wasm;
 
-#[derive(Debug, Clone, Default)]
+use anyhow::Result;
+use style::Theme;
+
+#[derive(Debug, Clone)]
 pub struct ProcessOptions {
     pub no_line_aware: bool,
+    pub theme: Theme,
+}
+
+impl Default for ProcessOptions {
+    fn default() -> Self {
+        Self {
+            no_line_aware: false,
+            theme: Theme::default(),
+        }
+    }
 }
 
 pub fn process(input: &str) -> Result<String> {
@@ -17,17 +31,17 @@ pub fn process(input: &str) -> Result<String> {
 
 pub fn process_with_options(input: &str, opts: &ProcessOptions) -> Result<String> {
     let doc = parse::parse_document(input)?;
-    let mut ir = ir::build_ir(&doc)?;
+    let mut ir = ir::build_ir(&doc, &opts.theme)?;
     if opts.no_line_aware {
         for fg in &mut ir.flow_graphs {
             fg.line_aware = false;
         }
     }
-    let tree_layout = layout::tree::TreeLayout;
+    let tree_layout = layout::tree::TreeLayout { h_gap: opts.theme.h_gap, v_gap: opts.theme.v_gap };
     layout::Layout::apply(&tree_layout, &mut ir)?;
-    let flow_layout = layout::flow::FlowLayout;
+    let flow_layout = layout::flow::FlowLayout { h_gap: opts.theme.h_gap, v_gap: opts.theme.v_gap };
     layout::Layout::apply(&flow_layout, &mut ir)?;
-    Ok(render::render_svg(&ir))
+    Ok(render::render_svg(&ir, &opts.theme))
 }
 
 #[cfg(test)]
