@@ -154,7 +154,7 @@ fn parse_tree_node(value: &Value) -> Result<TreeNode> {
 fn parse_line_form(value: &Value) -> Result<Form> {
     let items = collect_list(value);
     // items[0] = "line", then options, then: from arrow to, then more options
-    let mut line_style = LineStyle::Straight;
+    let mut line_style = LineStyle::default();
     let mut options = Vec::new();
     let mut from = None;
     let mut arrow = Arrow::Forward;

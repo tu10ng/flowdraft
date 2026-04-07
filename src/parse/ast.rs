@@ -46,8 +46,8 @@ pub enum Direction {
 
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub enum LineStyle {
-    #[default]
     Straight,
+    #[default]
     Curved,
 }
 

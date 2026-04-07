@@ -156,4 +156,22 @@ mod tests {
         // Group containers should be rendered (check for group fill color)
         assert!(svg.contains("#f8f9fa"), "SVG missing group background");
     }
+
+    #[test]
+    fn test_line_default_curved_with_obstacle() {
+        // Three nodes in a row; line from a to c should route around b
+        let input = r#"(flow :right (a -> b -> c)) (line a -> c :desc "跳过")"#;
+        let svg = process(input).unwrap();
+        // Default line style is Curved, so SVG should contain a <path> (not <line>)
+        assert!(svg.contains("跳过"), "SVG missing edge label");
+        assert!(svg.contains("<path"), "SVG missing path element for curved edge");
+    }
+
+    #[test]
+    fn test_line_straight_forces_line() {
+        let input = r#"(flow :right (a -> b -> c)) (line :straight a -> c :desc "直线")"#;
+        let svg = process(input).unwrap();
+        assert!(svg.contains("直线"), "SVG missing edge label");
+        assert!(svg.contains("<path"), "SVG missing path element for straight edge");
+    }
 }

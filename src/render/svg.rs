@@ -78,9 +78,12 @@ pub fn render_svg(ir: &DiagramIR, theme: &Theme) -> String {
                     to: to_id.clone(),
                     arrow: *arrow,
                     label: None,
-                    style: EdgeStyle::default(),
+                    style: EdgeStyle {
+                        line_style: crate::parse::LineStyle::Straight,
+                        ..EdgeStyle::default()
+                    },
                 };
-                let edge_svg = render_edge(from_node, to_node, &edge, offset_x, offset_y, theme);
+                let edge_svg = render_edge(from_node, to_node, &edge, offset_x, offset_y, theme, ir);
                 doc = doc.add(edge_svg);
             }
         }
@@ -91,10 +94,11 @@ pub fn render_svg(ir: &DiagramIR, theme: &Theme) -> String {
         if let (Some(from_node), Some(to_node)) =
             (ir.nodes.get(&edge.from), ir.nodes.get(&edge.to))
         {
-            let edge_svg = render_edge(from_node, to_node, edge, offset_x, offset_y, theme);
+            let edge_svg = render_edge(from_node, to_node, edge, offset_x, offset_y, theme, ir);
             doc = doc.add(edge_svg);
             if let Some(ref label) = edge.label {
-                let label_svg = render_edge_label(from_node, to_node, label, edge, offset_x, offset_y, theme);
+                let route = compute_edge_route(from_node, to_node, edge, offset_x, offset_y, ir);
+                let label_svg = render_edge_label(&route, label, edge, theme);
                 doc = doc.add(label_svg);
             }
         }
@@ -281,6 +285,270 @@ fn render_tree_edge(
         .set("stroke-width", theme.edge_stroke_width)
 }
 
+// --- Obstacle avoidance routing ---
+
+#[derive(Debug, Clone, Copy)]
+struct Rect {
+    x: f64,
+    y: f64,
+    w: f64,
+    h: f64,
+}
+
+impl Rect {
+    fn from_node(node: &Node, offset_x: f64, offset_y: f64) -> Self {
+        Rect {
+            x: node.x + offset_x - node.width / 2.0,
+            y: node.y + offset_y - node.height / 2.0,
+            w: node.width,
+            h: node.height,
+        }
+    }
+
+    fn from_group(group: &Group, offset_x: f64, offset_y: f64) -> Self {
+        Rect {
+            x: group.x + offset_x - group.width / 2.0,
+            y: group.y + offset_y - group.height / 2.0,
+            w: group.width,
+            h: group.height,
+        }
+    }
+
+    fn expanded(&self, margin: f64) -> Self {
+        Rect {
+            x: self.x - margin,
+            y: self.y - margin,
+            w: self.w + margin * 2.0,
+            h: self.h + margin * 2.0,
+        }
+    }
+
+    fn left(&self) -> f64 { self.x }
+    fn right(&self) -> f64 { self.x + self.w }
+    fn top(&self) -> f64 { self.y }
+    fn bottom(&self) -> f64 { self.y + self.h }
+    fn cx(&self) -> f64 { self.x + self.w / 2.0 }
+    fn cy(&self) -> f64 { self.y + self.h / 2.0 }
+}
+
+/// Liang-Barsky line-segment vs AABB intersection test.
+fn line_intersects_aabb(x1: f64, y1: f64, x2: f64, y2: f64, r: &Rect) -> bool {
+    let dx = x2 - x1;
+    let dy = y2 - y1;
+    let p = [-dx, dx, -dy, dy];
+    let q = [
+        x1 - r.left(),
+        r.right() - x1,
+        y1 - r.top(),
+        r.bottom() - y1,
+    ];
+
+    let mut t_min = 0.0_f64;
+    let mut t_max = 1.0_f64;
+
+    for i in 0..4 {
+        if p[i].abs() < 1e-12 {
+            if q[i] < 0.0 {
+                return false;
+            }
+        } else {
+            let t = q[i] / p[i];
+            if p[i] < 0.0 {
+                t_min = t_min.max(t);
+            } else {
+                t_max = t_max.min(t);
+            }
+            if t_min > t_max {
+                return false;
+            }
+        }
+    }
+    true
+}
+
+/// Find the first obstacle hit by the line segment, returning its index.
+fn first_hit(start: (f64, f64), end: (f64, f64), obstacles: &[Rect]) -> Option<usize> {
+    let mut best: Option<(usize, f64)> = None;
+    for (i, obs) in obstacles.iter().enumerate() {
+        if line_intersects_aabb(start.0, start.1, end.0, end.1, obs) {
+            let dist = (obs.cx() - start.0).powi(2) + (obs.cy() - start.1).powi(2);
+            if best.map_or(true, |(_, d)| dist < d) {
+                best = Some((i, dist));
+            }
+        }
+    }
+    best.map(|(i, _)| i)
+}
+
+fn collect_obstacles(
+    ir: &DiagramIR,
+    exclude: &HashSet<&str>,
+    offset_x: f64,
+    offset_y: f64,
+    margin: f64,
+) -> Vec<Rect> {
+    let group_ids: HashSet<&str> = ir.groups.iter().map(|g| g.id.as_str()).collect();
+    // Only skip children of groups that are NOT excluded (those are covered by the group rect).
+    // Children of excluded groups should participate in obstacle detection normally.
+    let covered_children: HashSet<&str> = ir.groups.iter()
+        .filter(|g| !exclude.contains(g.id.as_str()))
+        .flat_map(|g| g.children.iter().map(|c| c.as_str()))
+        .collect();
+
+    let mut rects = Vec::new();
+
+    // Add groups as obstacles (excluding source/target groups)
+    for group in &ir.groups {
+        if group.width > 0.0 && !exclude.contains(group.id.as_str()) {
+            rects.push(Rect::from_group(group, offset_x, offset_y).expanded(margin));
+        }
+    }
+
+    // Add nodes that are not in excluded set, not group instance nodes, and not covered by a non-excluded group rect
+    for node in ir.nodes.values() {
+        if exclude.contains(node.id.as_str()) {
+            continue;
+        }
+        if group_ids.contains(node.id.as_str()) {
+            continue;
+        }
+        if covered_children.contains(node.id.as_str()) {
+            continue;
+        }
+        rects.push(Rect::from_node(node, offset_x, offset_y).expanded(margin));
+    }
+
+    rects
+}
+
+fn compute_route(
+    start: (f64, f64),
+    end: (f64, f64),
+    obstacles: &[Rect],
+    depth: usize,
+) -> Vec<(f64, f64)> {
+    if depth == 0 {
+        return vec![start, end];
+    }
+
+    let hit = match first_hit(start, end, obstacles) {
+        Some(i) => i,
+        None => return vec![start, end],
+    };
+
+    let obs = &obstacles[hit];
+    let dx = (end.0 - start.0).abs();
+    let dy = (end.1 - start.1).abs();
+
+    // Choose bypass side: for mostly-horizontal lines, go above or below;
+    // for mostly-vertical lines, go left or right.
+    let waypoint = if dx >= dy {
+        // Horizontal-ish: bypass above or below
+        let mid_x = obs.cx();
+        let above_dist = (start.1 - obs.top()).abs();
+        let below_dist = (start.1 - obs.bottom()).abs();
+        if above_dist <= below_dist {
+            (mid_x, obs.top())
+        } else {
+            (mid_x, obs.bottom())
+        }
+    } else {
+        // Vertical-ish: bypass left or right
+        let mid_y = obs.cy();
+        let left_dist = (start.0 - obs.left()).abs();
+        let right_dist = (start.0 - obs.right()).abs();
+        if left_dist <= right_dist {
+            (obs.left(), mid_y)
+        } else {
+            (obs.right(), mid_y)
+        }
+    };
+
+    // Exclude the bypassed obstacle from recursive calls to avoid infinite loops
+    let remaining: Vec<Rect> = obstacles.iter().enumerate()
+        .filter(|(i, _)| *i != hit)
+        .map(|(_, r)| *r)
+        .collect();
+
+    let mut path = compute_route(start, waypoint, &remaining, depth - 1);
+    path.pop(); // remove duplicate waypoint
+    path.extend(compute_route(waypoint, end, &remaining, depth - 1));
+    path
+}
+
+/// Build the SVG path data for a smooth cubic Bezier through waypoints.
+fn smooth_bezier_path(points: &[(f64, f64)]) -> String {
+    if points.len() < 2 {
+        return String::new();
+    }
+    if points.len() == 2 {
+        let (x0, y0) = points[0];
+        let (x1, y1) = points[1];
+        let dx = x1 - x0;
+        let dy = y1 - y0;
+        let cx1 = x0 + dx * 0.3;
+        let cy1 = y0 + dy * 0.1;
+        let cx2 = x1 - dx * 0.3;
+        let cy2 = y1 - dy * 0.1;
+        return format!("M {x0},{y0} C {cx1},{cy1} {cx2},{cy2} {x1},{y1}");
+    }
+
+    // Catmull-Rom to cubic Bezier conversion
+    let mut d = format!("M {},{}", points[0].0, points[0].1);
+    let n = points.len();
+    for i in 0..n - 1 {
+        let p0 = if i == 0 { points[0] } else { points[i - 1] };
+        let p1 = points[i];
+        let p2 = points[i + 1];
+        let p3 = if i + 2 < n { points[i + 2] } else { points[n - 1] };
+
+        let tension = 6.0;
+        let cp1x = p1.0 + (p2.0 - p0.0) / tension;
+        let cp1y = p1.1 + (p2.1 - p0.1) / tension;
+        let cp2x = p2.0 - (p3.0 - p1.0) / tension;
+        let cp2y = p2.1 - (p3.1 - p1.1) / tension;
+
+        d.push_str(&format!(
+            " C {cp1x},{cp1y} {cp2x},{cp2y} {},{}", p2.0, p2.1
+        ));
+    }
+    d
+}
+
+/// Compute the route waypoints for an edge (used for both rendering and label placement).
+fn compute_edge_route(
+    from: &Node,
+    to: &Node,
+    edge: &Edge,
+    offset_x: f64,
+    offset_y: f64,
+    ir: &DiagramIR,
+) -> Vec<(f64, f64)> {
+    let (fx, fy) = edge_point(from, to, offset_x, offset_y);
+    let (tx, ty) = edge_point(to, from, offset_x, offset_y);
+
+    match edge.style.line_style {
+        crate::parse::LineStyle::Straight => vec![(fx, fy), (tx, ty)],
+        crate::parse::LineStyle::Curved => {
+            // Find which groups the source/target belong to
+            let mut exclude: HashSet<&str> = HashSet::new();
+            exclude.insert(edge.from.as_str());
+            exclude.insert(edge.to.as_str());
+            for group in &ir.groups {
+                if group.children.iter().any(|c| c == &edge.from || c == &edge.to)
+                    || group.id == edge.from
+                    || group.id == edge.to
+                {
+                    exclude.insert(group.id.as_str());
+                }
+            }
+
+            let obstacles = collect_obstacles(ir, &exclude, offset_x, offset_y, 8.0);
+            compute_route((fx, fy), (tx, ty), &obstacles, 10)
+        }
+    }
+}
+
 fn render_edge(
     from: &Node,
     to: &Node,
@@ -288,49 +556,61 @@ fn render_edge(
     offset_x: f64,
     offset_y: f64,
     theme: &Theme,
-) -> element::Line {
+    ir: &DiagramIR,
+) -> element::Group {
     let color = edge
         .style
         .color
         .as_deref()
         .unwrap_or(&theme.edge_color);
 
-    // Connect from edge of nodes
-    let (fx, fy) = edge_point(from, to, offset_x, offset_y);
-    let (tx, ty) = edge_point(to, from, offset_x, offset_y);
+    let route = compute_edge_route(from, to, edge, offset_x, offset_y, ir);
 
-    let mut line = element::Line::new()
-        .set("x1", fx)
-        .set("y1", fy)
-        .set("x2", tx)
-        .set("y2", ty)
+    let path_data = match edge.style.line_style {
+        crate::parse::LineStyle::Straight => {
+            let (fx, fy) = route[0];
+            let (tx, ty) = route[route.len() - 1];
+            format!("M {fx},{fy} L {tx},{ty}")
+        }
+        crate::parse::LineStyle::Curved => {
+            if route.len() <= 2 {
+                // No obstacles hit — draw a straight line
+                let (fx, fy) = route[0];
+                let (tx, ty) = route[route.len() - 1];
+                format!("M {fx},{fy} L {tx},{ty}")
+            } else {
+                smooth_bezier_path(&route)
+            }
+        }
+    };
+
+    let mut path = element::Path::new()
+        .set("d", path_data)
+        .set("fill", "none")
         .set("stroke", color)
         .set("stroke-width", theme.edge_stroke_width);
 
     match edge.arrow {
         Arrow::Forward => {
-            line = line.set("marker-end", "url(#arrow-forward)");
+            path = path.set("marker-end", "url(#arrow-forward)");
         }
         Arrow::Backward => {
-            line = line.set("marker-start", "url(#arrow-backward)");
+            path = path.set("marker-start", "url(#arrow-backward)");
         }
         Arrow::Both => {
-            line = line.set("marker-start", "url(#arrow-backward)");
-            line = line.set("marker-end", "url(#arrow-forward)");
+            path = path.set("marker-start", "url(#arrow-backward)");
+            path = path.set("marker-end", "url(#arrow-forward)");
         }
         Arrow::None => {}
     }
 
-    line
+    element::Group::new().add(path)
 }
 
 fn render_edge_label(
-    from: &Node,
-    to: &Node,
+    route: &[(f64, f64)],
     label: &str,
     edge: &Edge,
-    offset_x: f64,
-    offset_y: f64,
     theme: &Theme,
 ) -> element::Text {
     let color = edge
@@ -339,8 +619,15 @@ fn render_edge_label(
         .as_deref()
         .unwrap_or(&theme.text_color);
 
-    let mx = (from.x + to.x) / 2.0 + offset_x;
-    let my = (from.y + to.y) / 2.0 + offset_y - 6.0;
+    // Place label at the midpoint of the route
+    let mid_idx = route.len() / 2;
+    let (mx, my) = if route.len() % 2 == 0 && route.len() >= 2 {
+        let (ax, ay) = route[mid_idx - 1];
+        let (bx, by) = route[mid_idx];
+        ((ax + bx) / 2.0, (ay + by) / 2.0 - 6.0)
+    } else {
+        (route[mid_idx].0, route[mid_idx].1 - 6.0)
+    };
 
     Text::new(label)
         .set("x", mx)
